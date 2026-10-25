@@ -1,6 +1,6 @@
-# Sistema Web de Votaciones · Festival de la Leyenda Vallenata 2027
+# FestivalVallenato · Sistema Web de Votaciones
 
-Proyecto de **Desarrollo Web** (Fundación Universitaria del Área Andina): plataforma configurable para gestionar ediciones, categorías, votaciones, opciones y votos del Festival.
+Plataforma funcional de votaciones para el Festival de la Leyenda Vallenata 2027. Proyecto de **Desarrollo Web** (Fundación Universitaria del Área Andina): plataforma configurable para gestionar ediciones, categorías, votaciones, opciones y votos del Festival.
 
 **Equipo:** Juan Guillermo Cardona Cifuentes · Didier Yovani Combita Pérez · Javier Alexander Puentes Bejarano
 
