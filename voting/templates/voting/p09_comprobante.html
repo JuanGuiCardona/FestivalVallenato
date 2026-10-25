@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{# P-09 Resultado o mensaje posterior · CU-04 paso 9 · RF-09 #}
+{% block doc_titulo %}Voto registrado{% endblock %}
+{% block pantalla %}P-09{% endblock %}{% block aria %}P-09 Resultado o mensaje{% endblock %}
+{% block titulo %}Voto registrado{% endblock %}
+{% block body %}
+  <div class="ok-box"><span class="acc big" aria-hidden="true"></span><span class="seal sm" role="img" aria-label="60 años"><b>60</b><i>años</i></span>¡Voto registrado!<br>Gracias por participar</div>
+  <p class="sub">Código de comprobante: <span class="code">{{ voto.codigo }}</span>*</p>
+  <p class="sub">Votación: {{ v.titulo }} · {{ voto.fecha_hora|date:"j M Y, g:i A" }}</p>
+  <p class="sub" style="margin-bottom:18px">{% if v.resultados_visibles == "vivo" %}Puedes ver los resultados en vivo desde la votación*.{% elif v.resultados_visibles == "cierre" %}Los resultados se publicarán al cierre de la votación*.{% else %}Los resultados los consultará la organización del Festival*.{% endif %}</p>
+  <a class="btn primary" href="{% url 'voting:por_categoria' v.categoria_id %}">Ver otras votaciones</a>
+  <a class="btn secondary" href="{% url 'catalog:inicio' %}">Ir al inicio</a>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{# P-03 Inicio de sesión · CU-02 · RF-02, RF-03 · RNF-04 #}
+{% block doc_titulo %}Iniciar sesión{% endblock %}
+{% block pantalla %}P-03{% endblock %}{% block aria %}P-03 Inicio de sesión{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'catalog:inicio' %}">← Inicio</a>{% endblock %}
+{% block titulo %}Iniciar sesión{% endblock %}
+{% block body %}
+  {% if aviso %}<p class="msg info" id="login-notice" role="status">{{ aviso }}</p>{% endif %}
+  {% if not user.is_authenticated %}
+    <div id="login-guest">
+      <h3>Bienvenido de nuevo</h3>
+      <form id="form-login" method="post" novalidate>
+        {% csrf_token %}
+        {% if siguiente %}<input type="hidden" name="next" value="{{ siguiente }}">{% endif %}
+        <label for="l-correo">Correo electrónico</label>
+        <input id="l-correo" name="correo" type="email" autocomplete="username" placeholder="correo@ejemplo.com" value="{{ form.correo.value|default:'' }}" {% if form.correo.value %}data-enfocar-siguiente{% endif %}>
+        <label for="l-clave">Contraseña</label>
+        <input id="l-clave" name="clave" type="password" autocomplete="current-password">
+        {% if error %}<p class="msg err" id="l-error" role="alert">{{ error }}</p>{% endif %}
+        <button class="btn primary" type="submit">Ingresar</button>
+      </form>
+      <a class="link" href="{% url 'accounts:recuperar' %}">¿Olvidaste tu contraseña?*</a>
+      <a class="link" href="{% url 'accounts:registro' %}{% if siguiente %}?next={{ siguiente|urlencode }}{% endif %}">¿No tienes cuenta? Regístrate</a>
+      <p class="note" style="text-align:center">El administrador usa esta misma pantalla y el sistema lo redirige según su rol.</p>
+      {% if mostrar_demo %}<p class="demo-hint"><b>Cuenta de prueba</b><br>votante@demo.co · demo1234<br>admin@demo.co · admin1234</p>{% endif %}
+    </div>
+  {% else %}
+    <div id="login-user">
+      <h3>Tu sesión</h3>
+      <p class="msg ok" id="session-info">Sesión iniciada como {{ user.correo }} ({% if user.es_administrador %}administrador{% else %}votante{% endif %}).</p>
+      {% if user.es_administrador %}<a class="btn primary" href="{% url 'results:panel' %}">Ir al panel de administración</a>{% else %}<a class="btn primary" href="{% url 'catalog:categorias' %}">Ver categorías</a>{% endif %}
+      {% include "includes/logout.html" %}
+    </div>
+  {% endif %}
+{% endblock %}

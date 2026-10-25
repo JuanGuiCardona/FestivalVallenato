@@ -1,0 +1,8 @@
+.env
+.venv/
+env_platform-festival/
+__pycache__/
+*.pyc
+db.sqlite3
+staticfiles/
+desktop.ini

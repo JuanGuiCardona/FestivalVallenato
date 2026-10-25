@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{# P-04 Categorías · CU-03 · RF-04 #}
+{% block doc_titulo %}Categorías{% endblock %}
+{% block pantalla %}P-04{% endblock %}{% block aria %}P-04 Categorías{% endblock %}
+{% block titulo %}Categorías{% endblock %}
+{% block body %}
+  <p class="sub" style="font-size:14px">{% if edicion %}Edición {{ edicion.anio }}{% else %}Sin edición vigente{% endif %}</p>
+  <div class="list" id="cat-list">
+    {% for c in categorias %}
+      <a class="card" href="{% url 'voting:por_categoria' c.pk %}"><span class="t">{{ c.nombre }}</span><small>{{ c.disponibles }} {% if c.disponibles == 1 %}votación disponible{% else %}votaciones disponibles{% endif %}</small></a>
+    {% empty %}
+      <p class="note">Aún no hay categorías publicadas.</p>
+    {% endfor %}
+  </div>
+{% endblock %}
+{% block tabbar %}{% include "includes/tabbar.html" with activo="Categorías" %}{% endblock %}

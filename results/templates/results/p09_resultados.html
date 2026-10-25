@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load humanize %}
+{# P-09 en modo resultados · CU-05 · RF-10 · RN-11 #}
+{% block doc_titulo %}Resultados{% endblock %}
+{% block pantalla %}P-09{% endblock %}{% block aria %}P-09 Resultados{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'voting:detalle' v.pk %}">← Atrás</a>{% endblock %}
+{% block titulo %}Resultados{% endblock %}
+{% block body %}
+  <h3>{{ v.titulo }}</h3>
+  <p class="sub">Con corte a {{ corte|date:"j M Y, g:i A" }}{% if v.estado == "abierta" %} · resultados en vivo{% endif %}</p>
+  {% include "includes/barras.html" %}
+  <p class="note" style="margin:0 0 14px"><b>Total de votos: {{ total|intcomma }}</b></p>
+  <a class="btn primary" href="{% url 'results:publicos' %}">Ver otras votaciones</a>
+  <a class="btn secondary" href="{% url 'catalog:inicio' %}">Ir al inicio</a>
+{% endblock %}

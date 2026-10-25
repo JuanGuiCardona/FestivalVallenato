@@ -1,0 +1,2 @@
+{# Estado visible (12.1 Retroalimentación): abierta, próxima, cerrada, borrador, inactiva #}
+<span class="chip {{ estado }}">{% if estado == "abierta" %}Abierta{% elif estado == "proxima" %}Próximamente{% elif estado == "cerrada" %}Cerrada{% elif estado == "borrador" %}Borrador{% elif estado == "inactiva" %}Inactiva{% else %}{{ estado|capfirst }}{% endif %}</span>

@@ -1,0 +1,44 @@
+{% load static %}<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block doc_titulo %}Votaciones{% endblock %} · Festival Vallenato 2027</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700&family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{% static 'css/prototipo.css' %}">
+<link rel="stylesheet" href="{% static 'css/django.css' %}">
+</head>
+<body>
+{# Estructura del prototipo: escenario > celular > una pantalla (section.screen). #}
+<div class="stage">
+  <main class="device">
+    <div class="phone" id="phone">
+      <div id="screens">
+        <section class="screen is-current" id="{% block pantalla %}{% endblock %}" aria-label="{% block aria %}{% endblock %}">
+          <header class="hdr">
+            {% block hdr_izq %}{% endblock %}
+            <h2 tabindex="-1">{% block titulo %}{% endblock %}</h2>
+            {% block hdr_der %}{% endblock %}
+          </header>
+          <div class="body">
+            {% block body %}{% endblock %}
+          </div>
+          {% block tabbar %}{% endblock %}
+        </section>
+      </div>
+    </div>
+  </main>
+  {# Mensajes de Django mostrados como el "toast" del prototipo #}
+  {% if messages %}
+    {% for m in messages %}{% if forloop.last %}
+      <div class="toast show {{ m.tags }}" id="toast" role="status" aria-live="polite">{{ m }}</div>
+    {% endif %}{% endfor %}
+  {% else %}
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  {% endif %}
+</div>
+<script src="{% static 'js/app.js' %}" defer></script>
+</body>
+</html>

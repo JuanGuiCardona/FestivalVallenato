@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{# P-07 Opciones · CU-04 pasos 3-4 · RF-06, RF-07 #}
+{% block doc_titulo %}Opciones{% endblock %}
+{% block pantalla %}P-07{% endblock %}{% block aria %}P-07 Opciones{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'voting:detalle' v.pk %}">← Atrás</a>{% endblock %}
+{% block titulo %}Opciones disponibles{% endblock %}
+{% block body %}
+  <form id="form-options" method="post" novalidate>
+    {% csrf_token %}
+    <h3 id="p7-title">{{ v.titulo }}</h3>
+    <div class="list" id="opt-list" role="radiogroup" aria-labelledby="p7-title">
+      {% for o in opciones %}
+        <label class="opt"><input type="radio" name="opcion" value="{{ o.pk }}" {% if o.pk == seleccion %}checked{% endif %}><span class="dot" aria-hidden="true"></span><span><b>{{ o.nombre }}</b><span class="d">{{ o.descripcion }}</span></span></label>
+      {% endfor %}
+    </div>
+    {% if error %}<p class="msg err" id="o-error" role="alert">Selecciona una opción para continuar.</p>{% endif %}
+    <button class="btn primary" type="submit">Continuar</button>
+    <a class="btn secondary" href="{% url 'voting:detalle' v.pk %}">Cancelar</a>
+  </form>
+{% endblock %}

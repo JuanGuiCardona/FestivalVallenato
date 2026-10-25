@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{# A-03 Gestión de votaciones · CU-07 · RF-13 · RN-04, RN-06, RN-09, RN-11 #}
+{% block doc_titulo %}Gestión de votaciones{% endblock %}
+{% block pantalla %}A-03{% endblock %}{% block aria %}A-03 Gestión de votaciones{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'results:panel' %}">← Panel</a>{% endblock %}
+{% block titulo %}Gestión de votaciones{% endblock %}
+{% block body %}
+  <form class="addrow" id="form-vot-add" method="post" action="{% url 'voting:admin_votaciones' %}{% if filtro_cat %}?categoria={{ filtro_cat }}{% endif %}">
+    {% csrf_token %}
+    <label for="vot-new">Nueva votación</label>
+    <input id="vot-new" name="titulo" type="text" placeholder="Título de la votación">
+    <label for="vot-new-cat" style="margin-top:4px">Categoría</label>
+    <select id="vot-new-cat" name="categoria">
+      {% for c in categorias %}<option value="{{ c.pk }}" {% if filtro_cat == c.pk|stringformat:"d" %}selected{% endif %}>{{ c.edicion.anio }} · {{ c.nombre }}</option>{% endfor %}
+    </select>
+    <button class="btn primary sm" type="submit">+ Nueva votación</button>
+  </form>
+
+  <form class="filtros" method="get">
+    <div>
+      <label for="vot-filter">Filtrar por categoría</label>
+      <select id="vot-filter" name="categoria" data-autosubmit>
+        <option value="">Todas las categorías</option>
+        {% for c in categorias %}<option value="{{ c.pk }}" {% if filtro_cat == c.pk|stringformat:"d" %}selected{% endif %}>{{ c.edicion.anio }} · {{ c.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="vot-estado">Estado</label>
+      <select id="vot-estado" name="estado" data-autosubmit>
+        <option value="">Todos</option>
+        {% for valor, texto in estados %}<option value="{{ valor }}" {% if filtro_estado == valor %}selected{% endif %}>{{ texto }}</option>{% endfor %}
+      </select>
+    </div>
+    <noscript><button class="btn secondary sm" type="submit">Filtrar</button></noscript>
+  </form>
+
+  <div class="list" id="a-vot-list">
+    {% for v in votaciones %}
+      <div class="card">
+        {% if editar == v.pk|stringformat:"d" and form_config %}
+          <form class="edit-form" method="post" action="{% url 'voting:admin_votacion_configurar' v.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="filtro_categoria" value="{{ filtro_cat }}"><input type="hidden" name="filtro_estado" value="{{ filtro_estado }}">
+            <span class="t">Configurar votación</span>
+            {% for f in form_config %}
+              <label for="{{ f.id_for_label }}">{{ f.label|capfirst }}{% if f.name == "max_votos_por_votante" or f.name == "periodicidad_voto" or f.name == "resultados_visibles" %}*{% endif %}</label>
+              {{ f }}
+            {% endfor %}
+            {% if form_config.bloqueados %}<p class="note">Ya tiene votos: la categoría, la apertura, el límite y la periodicidad no se pueden cambiar (CU-07 2a)*.</p>{% endif %}
+            <p class="note">* Reglas configurables pendientes de validación con el cliente (RN-06, RN-11).</p>
+            <div class="acts"><button class="mini" type="submit">Guardar</button><a class="mini" href="?categoria={{ filtro_cat }}&estado={{ filtro_estado }}">Cancelar</a></div>
+          </form>
+        {% else %}
+          <span class="t">{{ v.titulo }}</span>
+          <small>{{ v.categoria.edicion.anio }} · {{ v.categoria.nombre }}</small>
+          {% include "includes/chip.html" with estado=v.estado %}
+          <small>{% if v.fecha_apertura %}Abre {{ v.fecha_apertura|date:"j M Y, g:i A" }} · {% endif %}{% if v.fecha_cierre %}Cierra {{ v.fecha_cierre|date:"j M Y, g:i A" }}{% else %}Cierre por definir*{% endif %}</small>
+          <small>{{ v.texto_limite }}* · Resultados: {{ v.get_resultados_visibles_display|lower }}* · {{ v.total_votos }} voto{{ v.total_votos|pluralize }}</small>
+          <div class="acts">
+            <a class="mini" href="?categoria={{ filtro_cat }}&estado={{ filtro_estado }}&editar={{ v.pk }}">Configurar</a>
+            {% if v.estado == "borrador" or v.estado == "proxima" %}
+              {% include "voting/_accion_estado.html" with accion="abrir" texto="Abrir" %}
+              {% if v.estado == "borrador" and v.fecha_apertura and v.fecha_apertura > ahora %}{% include "voting/_accion_estado.html" with accion="programar" texto="Programar" %}{% endif %}
+              {% if v.estado == "proxima" %}{% include "voting/_accion_estado.html" with accion="borrador" texto="Pasar a borrador" %}{% endif %}
+            {% elif v.estado == "abierta" %}
+              {% include "voting/_accion_estado.html" with accion="cerrar" texto="Cerrar" peligro=True %}
+            {% else %}
+              {% include "voting/_accion_estado.html" with accion="reabrir" texto="Reabrir*" %}
+            {% endif %}
+            <a class="mini" href="{% url 'voting:admin_opciones' %}?votacion={{ v.pk }}">Opciones</a>
+          </div>
+        {% endif %}
+      </div>
+    {% empty %}
+      <p class="note">No hay votaciones con este filtro.</p>
+    {% endfor %}
+  </div>
+  <p class="note">Configura fechas y reglas con «Configurar». Para abrir se necesitan al menos 2 opciones activas (RN-09).</p>
+{% endblock %}

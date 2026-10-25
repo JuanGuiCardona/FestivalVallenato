@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{# A-02 Gestión de categorías (y ediciones) · CU-06 · RF-11, RF-12 · RN-02, RN-08, RN-10 #}
+{% block doc_titulo %}Gestión de categorías{% endblock %}
+{% block pantalla %}A-02{% endblock %}{% block aria %}A-02 Gestión de categorías{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'results:panel' %}">← Panel</a>{% endblock %}
+{% block titulo %}Gestión de categorías{% endblock %}
+{% block body %}
+  {# Filtros: edición · estado (nota del prototipo, ahora funcional) #}
+  <form class="filtros" method="get">
+    <div>
+      <label for="f-edicion">Edición</label>
+      <select id="f-edicion" name="edicion" data-autosubmit>
+        {% for e in ediciones %}<option value="{{ e.pk }}" {% if edicion and e.pk == edicion.pk %}selected{% endif %}>{{ e.anio }} · {{ e.nombre }}{% if e.estado == "activa" %} (vigente){% endif %}</option>{% empty %}<option value="">Sin ediciones</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="f-estado">Estado</label>
+      <select id="f-estado" name="estado" data-autosubmit>
+        <option value="" {% if not filtro_estado %}selected{% endif %}>Todas</option>
+        <option value="activa" {% if filtro_estado == "activa" %}selected{% endif %}>Activas</option>
+        <option value="inactiva" {% if filtro_estado == "inactiva" %}selected{% endif %}>Inactivas</option>
+      </select>
+    </div>
+    <noscript><button class="btn secondary sm" type="submit">Filtrar</button></noscript>
+  </form>
+
+  {% if edicion %}
+    <div class="card ficha">
+      {% if form_edicion %}
+        <form class="edit-form" method="post" action="{% url 'catalog:admin_edicion_editar' edicion.pk %}">
+          {% csrf_token %}
+          <label for="ed-nombre">Nombre de la edición</label><input id="ed-nombre" type="text" name="nombre" value="{{ form_edicion.nombre.value|default:'' }}">
+          <label for="ed-anio">Año</label><input id="ed-anio" type="number" name="anio" min="1968" max="2100" value="{{ form_edicion.anio.value|default:'' }}">
+          <label for="{{ form_edicion.fecha_inicio.id_for_label }}">Fecha de inicio</label>{{ form_edicion.fecha_inicio }}
+          <label for="{{ form_edicion.fecha_fin.id_for_label }}">Fecha de fin</label>{{ form_edicion.fecha_fin }}
+          <div class="acts"><button class="mini" type="submit">Guardar</button><a class="mini" href="?edicion={{ edicion.pk }}">Cancelar</a></div>
+        </form>
+      {% else %}
+        <span class="t">{{ edicion.nombre }}</span>
+        <small>Año {{ edicion.anio }}{% if edicion.fecha_inicio %} · {{ edicion.fecha_inicio|date:"j M Y" }}{% endif %}{% if edicion.fecha_fin %} – {{ edicion.fecha_fin|date:"j M Y" }}{% endif %}</small>
+        {% if edicion.estado == "activa" %}<span class="chip abierta">Vigente</span>{% else %}{% include "includes/chip.html" with estado="inactiva" %}{% endif %}
+        <div class="acts">
+          <a class="mini" href="?edicion={{ edicion.pk }}&editar_edicion={{ edicion.pk }}">Editar edición</a>
+          <form method="post" action="{% url 'catalog:admin_edicion_estado' edicion.pk %}">{% csrf_token %}<button class="mini {% if edicion.estado == 'activa' %}danger{% endif %}" type="submit">{% if edicion.estado == "activa" %}Desactivar{% else %}Activar como vigente{% endif %}</button></form>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <details class="addbox">
+    <summary>+ Nueva edición</summary>
+    <form class="addrow" method="post" action="{% url 'catalog:admin_edicion_crear' %}">
+      {% csrf_token %}
+      {% if edicion %}<input type="hidden" name="edicion_actual" value="{{ edicion.pk }}">{% endif %}
+      <label for="ne-nombre">Nombre</label><input id="ne-nombre" type="text" name="nombre" placeholder="Ej.: 61° Festival de la Leyenda Vallenata">
+      <label for="ne-anio">Año</label><input id="ne-anio" type="number" name="anio" min="1968" max="2100" placeholder="2028">
+      <label for="ne-ini">Fecha de inicio</label><input id="ne-ini" type="date" name="fecha_inicio">
+      <label for="ne-fin">Fecha de fin</label><input id="ne-fin" type="date" name="fecha_fin">
+      <button class="btn primary sm" type="submit">Crear edición</button>
+    </form>
+  </details>
+
+  {% if edicion %}
+    <form class="addrow" id="form-cat-add" method="post" action="{% url 'catalog:admin_categoria_crear' %}">
+      {% csrf_token %}
+      <input type="hidden" name="edicion" value="{{ edicion.pk }}">
+      <label for="cat-new">Nueva categoría</label>
+      <input id="cat-new" name="nombre" type="text" placeholder="Nombre de la categoría">
+      <button class="btn primary sm" type="submit">+ Nueva categoría</button>
+    </form>
+    <div class="list" id="a-cat-list">
+      {% for c in categorias %}
+        <div class="card">
+          {% if editar == c.pk|stringformat:"d" %}
+            <form class="edit-form" method="post" action="{% url 'catalog:admin_categoria_editar' c.pk %}">
+              {% csrf_token %}
+              <label for="ec-nombre">Nombre</label><input id="ec-nombre" type="text" name="nombre" value="{{ c.nombre }}" data-autofocus>
+              <label for="ec-desc">Descripción</label><textarea id="ec-desc" name="descripcion" rows="2">{{ c.descripcion }}</textarea>
+              <div class="acts"><button class="mini" type="submit">Guardar</button><a class="mini" href="?edicion={{ edicion.pk }}">Cancelar</a></div>
+            </form>
+          {% else %}
+            <span class="t">{{ c.nombre }}</span> {% if not c.activa %}{% include "includes/chip.html" with estado="inactiva" %}{% endif %}
+            {% if c.descripcion %}<small>{{ c.descripcion }}</small>{% endif %}
+            {% if c.abiertas %}<small>{{ c.abiertas }} votación{{ c.abiertas|pluralize:"es" }} abierta{{ c.abiertas|pluralize }}</small>{% endif %}
+            <div class="acts">
+              <a class="mini" href="?edicion={{ edicion.pk }}&editar={{ c.pk }}">Editar</a>
+              <form method="post" action="{% url 'catalog:admin_categoria_mover' c.pk %}">{% csrf_token %}<input type="hidden" name="direccion" value="subir"><button class="mini" type="submit" aria-label="Subir {{ c.nombre }}">↑</button></form>
+              <form method="post" action="{% url 'catalog:admin_categoria_mover' c.pk %}">{% csrf_token %}<input type="hidden" name="direccion" value="bajar"><button class="mini" type="submit" aria-label="Bajar {{ c.nombre }}">↓</button></form>
+              <form method="post" action="{% url 'catalog:admin_categoria_estado' c.pk %}">{% csrf_token %}<button class="mini {% if c.activa %}danger{% endif %}" type="submit">{% if c.activa %}Desactivar{% else %}Activar{% endif %}</button></form>
+            </div>
+          {% endif %}
+        </div>
+      {% empty %}
+        <p class="note">{% if filtro_estado %}No hay categorías con este filtro.{% else %}Esta edición aún no tiene categorías.{% endif %}</p>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="note">Crea la primera edición para empezar a agregar categorías.</p>
+  {% endif %}
+  <p class="note">Filtros: edición · estado. Solo una edición está vigente a la vez*.</p>
+{% endblock %}

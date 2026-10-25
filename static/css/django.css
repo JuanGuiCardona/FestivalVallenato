@@ -1,0 +1,51 @@
+/* Ajustes para la versión Django del prototipo.
+   prototipo.css se conserva igual; aquí solo hay estilos para lo que el
+   prototipo no tenía (formularios por POST, filtros, edición en línea). */
+
+/* Cada página de Django muestra una sola pantalla (antes se usaba :target). */
+.screen.is-current { display: flex; }
+
+/* Botones que ahora van dentro de un <form> (POST) ocupan todo el ancho, como antes. */
+.body form > .btn, .body form > button.btn { width: 100%; }
+.body form .btn.sm { width: auto; }
+.addrow .btn.sm { width: 100%; }
+
+/* "Salir" del panel: el botón vive dentro de un formulario POST. */
+.hdr form.side { margin: 0; }
+.hdr form.side button.salir { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--yellow); cursor: pointer; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+
+/* Acciones de las tarjetas: los formularios no rompen la fila de botones. */
+.acts form { display: contents; }
+a.mini { display: inline-flex; align-items: center; text-decoration: none; }
+
+/* Campos que el prototipo no tenía. */
+input[type="number"], input[type="date"], input[type="datetime-local"], textarea {
+  width: 100%; min-height: 46px; padding: 0 14px; border: 2px solid var(--line); border-radius: 12px;
+  background: var(--surface); margin-bottom: 14px; font: inherit; color: inherit;
+}
+textarea { padding: 10px 14px; resize: vertical; min-height: 70px; }
+input:focus-visible, textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+input:disabled, select:disabled, textarea:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Filtros (A-02, A-03, A-05). */
+.filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 10px; margin-bottom: 6px; align-items: end; }
+.filtros .btn.sm { margin-bottom: 14px; }
+
+/* Edición en línea dentro de una tarjeta. */
+.card .edit-form { width: 100%; text-align: left; }
+.card .edit-form .t { display: block; margin-bottom: 8px; text-align: center; }
+.card .edit-form label { margin-top: 2px; }
+.card .edit-form .acts { margin-top: 0; }
+.ficha { margin-bottom: 12px; }
+
+/* Bloque plegable "+ Nueva edición". */
+.addbox { margin-bottom: 14px; border: 1.5px dashed var(--line); border-radius: 12px; padding: 0 12px; }
+.addbox summary { cursor: pointer; padding: 12px 0; font-weight: 650; color: var(--link); list-style-position: inside; }
+.addbox[open] { padding-bottom: 12px; }
+
+/* Detalle opcional en la auditoría. */
+.audit .det { color: var(--muted); }
+
+@media (min-width: 1024px) {
+  .list .card:has(.edit-form) { grid-column: 1 / -1; }
+}

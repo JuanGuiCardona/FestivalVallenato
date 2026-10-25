@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{# P-01 Inicio · CU-03 · RF-04 #}
+{% block doc_titulo %}Inicio{% endblock %}
+{% block pantalla %}P-01{% endblock %}{% block aria %}P-01 Inicio{% endblock %}
+{% block titulo %}Festival Vallenato {{ edicion.anio|default:"2027" }}{% endblock %}
+{% block body %}
+  <div class="banner"><span class="seal" role="img" aria-label="60 años del Festival"><b>60</b><i>años</i></span><span class="acc" aria-hidden="true"></span><strong>Festival Vallenato {{ edicion.anio|default:"2027" }}</strong><span>Valledupar · 60 años de música y tradición</span></div>
+  <h3>Vota por lo mejor del Festival</h3>
+  <p class="sub">Consulta las categorías y votaciones disponibles</p>
+  <a class="btn primary" href="{% url 'catalog:categorias' %}">Ver categorías</a>
+  <div id="home-auth">
+    {% if user.is_authenticated %}
+      <p class="msg ok">Hola, <b>{{ user.nombre }}</b>. Ya puedes votar.</p>
+      {% if user.es_administrador %}<a class="btn secondary" href="{% url 'results:panel' %}">Ir al panel de administración</a>{% endif %}
+      {% include "includes/logout.html" %}
+    {% else %}
+      <a class="btn secondary" href="{% url 'accounts:login' %}">Iniciar sesión</a>
+      <a class="btn secondary" href="{% url 'accounts:registro' %}">Registrarme</a>
+    {% endif %}
+  </div>
+  <h3 class="with-acc"><span class="acc" aria-hidden="true"></span>Votaciones destacadas</h3>
+  <div class="list" id="home-featured">
+    {% for v in destacadas %}
+      <a class="card" href="{% url 'voting:detalle' v.pk %}"><span class="t">{{ v.titulo }}</span>{% include "includes/chip.html" with estado=v.estado %}</a>
+    {% empty %}
+      <p class="note">Aún no hay votaciones disponibles.</p>
+    {% endfor %}
+  </div>
+{% endblock %}
+{% block tabbar %}{% include "includes/tabbar.html" with activo="Inicio" %}{% endblock %}

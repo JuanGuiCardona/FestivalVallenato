@@ -1,0 +1,5 @@
+# Dependencias del Sistema Web de Votaciones (instalar con: pip install -r requirements.txt)
+# Django 6.x necesita MySQL 8.4+ (o MariaDB 10.11+). Con MySQL 8.0 usa: pip install "django>=5.2,<6"
+Django>=5.2,<6.2
+mysqlclient>=2.2
+python-dotenv>=1.0

@@ -1,0 +1,7 @@
+{# Barra inferior de las pantallas públicas (12.1: navegación inferior con cuatro accesos) #}
+<nav class="tabbar" aria-label="Navegación principal">
+  <a href="{% url 'catalog:inicio' %}" {% if activo == "Inicio" %}aria-current="page"{% endif %}>Inicio</a>
+  <a href="{% url 'catalog:categorias' %}" {% if activo == "Categorías" %}aria-current="page"{% endif %}>Categorías</a>
+  <a href="{% url 'results:publicos' %}" {% if activo == "Resultados" %}aria-current="page"{% endif %}>Resultados</a>
+  <a href="{% url 'accounts:login' %}" {% if activo == "Perfil" %}aria-current="page"{% endif %}>{% if user.is_authenticated %}Perfil{% else %}Ingresar{% endif %}</a>
+</nav>

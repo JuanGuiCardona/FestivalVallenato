@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load humanize %}
+{# A-04 Gestión de opciones · CU-08 · RF-14 · RN-03, RN-09, RN-10 #}
+{% block doc_titulo %}Gestión de opciones{% endblock %}
+{% block pantalla %}A-04{% endblock %}{% block aria %}A-04 Gestión de opciones{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'voting:admin_votaciones' %}">← Atrás</a>{% endblock %}
+{% block titulo %}Gestión de opciones{% endblock %}
+{% block body %}
+  <form method="get">
+    <label for="opt-vot">Votación</label>
+    <select id="opt-vot" name="votacion" data-autosubmit>
+      {% for x in votaciones %}<option value="{{ x.pk }}" {% if v and x.pk == v.pk %}selected{% endif %}>{{ x.titulo }} · {{ x.get_estado_display }}</option>{% empty %}<option value="">Sin votaciones</option>{% endfor %}
+    </select>
+    <noscript><button class="btn secondary sm" type="submit">Ver</button></noscript>
+  </form>
+  {% if v %}
+    <form class="addrow" id="form-opt-add" method="post" action="{% url 'voting:admin_opcion_crear' %}">
+      {% csrf_token %}
+      <input type="hidden" name="votacion" value="{{ v.pk }}">
+      <input id="opt-new" name="nombre" type="text" aria-label="Nombre de la nueva opción" placeholder="Nombre de la opción">
+      <input name="descripcion" type="text" aria-label="Descripción de la nueva opción" placeholder="Descripción (opcional)">
+      <button class="btn primary sm" type="submit">+ Nueva opción</button>
+    </form>
+    <div class="list" id="a-opt-list">
+      {% for o in opciones %}
+        <div class="card">
+          {% if editar == o.pk|stringformat:"d" %}
+            <form class="edit-form" method="post" action="{% url 'voting:admin_opcion_editar' o.pk %}">
+              {% csrf_token %}
+              <label for="eo-nombre">Nombre</label><input id="eo-nombre" type="text" name="nombre" value="{{ o.nombre }}" data-autofocus>
+              <label for="eo-desc">Descripción</label><input id="eo-desc" type="text" name="descripcion" value="{{ o.descripcion }}">
+              <div class="acts"><button class="mini" type="submit">Guardar</button><a class="mini" href="?votacion={{ v.pk }}">Cancelar</a></div>
+            </form>
+          {% else %}
+            <span class="t">{{ o.nombre }}</span>
+            <small>{{ o.descripcion }} · {{ o.total_votos|intcomma }} voto{{ o.total_votos|pluralize }}</small>
+            {% if not o.activa %}{% include "includes/chip.html" with estado="inactiva" %}{% endif %}
+            <div class="acts">
+              <a class="mini" href="?votacion={{ v.pk }}&editar={{ o.pk }}">Editar</a>
+              <form method="post" action="{% url 'voting:admin_opcion_mover' o.pk %}">{% csrf_token %}<input type="hidden" name="direccion" value="subir"><button class="mini" type="submit" aria-label="Subir {{ o.nombre }}">↑</button></form>
+              <form method="post" action="{% url 'voting:admin_opcion_mover' o.pk %}">{% csrf_token %}<input type="hidden" name="direccion" value="bajar"><button class="mini" type="submit" aria-label="Bajar {{ o.nombre }}">↓</button></form>
+              <form method="post" action="{% url 'voting:admin_opcion_estado' o.pk %}">{% csrf_token %}<button class="mini {% if o.activa %}danger{% endif %}" type="submit">{% if o.activa %}Quitar{% else %}Activar{% endif %}</button></form>
+            </div>
+          {% endif %}
+        </div>
+      {% empty %}
+        <p class="note">Esta votación aún no tiene opciones.</p>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="note">Primero crea una votación.</p>
+  {% endif %}
+  <p class="note">Mínimo 2 opciones para abrir (RN-09). Una opción con votos se desactiva en lugar de eliminarse (RN-10).</p>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{# P-02 Registro · CU-01 · RF-01 · RN-12, RN-14 #}
+{% block doc_titulo %}Registro{% endblock %}
+{% block pantalla %}P-02{% endblock %}{% block aria %}P-02 Registro{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'catalog:inicio' %}">← Inicio</a>{% endblock %}
+{% block titulo %}Registro{% endblock %}
+{% block body %}
+  <h3>Crea tu cuenta de votante</h3>
+  <form id="form-register" method="post" novalidate>
+    {% csrf_token %}
+    {% if siguiente %}<input type="hidden" name="next" value="{{ siguiente }}">{% endif %}
+    <label for="r-nombre">Nombre completo</label>
+    <input id="r-nombre" name="nombre" type="text" autocomplete="name" placeholder="Nombre y apellidos" value="{{ form.nombre.value|default:'' }}">
+    <label for="r-correo">Correo electrónico</label>
+    <input id="r-correo" name="correo" type="email" autocomplete="email" placeholder="correo@ejemplo.com" value="{{ form.correo.value|default:'' }}">
+    <label for="r-clave">Contraseña</label>
+    <input id="r-clave" name="clave" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+    <label for="r-clave2">Confirmar contraseña</label>
+    <input id="r-clave2" name="clave2" type="password" autocomplete="new-password">
+    <label for="r-extra">Datos adicionales (por validar)*</label>
+    <input id="r-extra" name="ciudad" type="text" placeholder="Opcional: ciudad" value="{{ form.ciudad.value|default:'' }}">
+    <label class="check" for="r-acepto"><input id="r-acepto" name="acepta" type="checkbox" {% if form.acepta.value %}checked{% endif %}><span>Acepto el tratamiento de datos personales conforme a la Ley 1581 de 2012</span></label>
+    {% if error %}<p class="msg err" id="r-error" role="alert">{{ error }}</p>{% endif %}
+    <button class="btn primary" type="submit">Crear cuenta</button>
+  </form>
+  <a class="link" href="{% url 'accounts:login' %}{% if siguiente %}?next={{ siguiente|urlencode }}{% endif %}">¿Ya tienes cuenta? Inicia sesión</a>
+  <p class="note">* Campos sujetos a validación con el cliente</p>
+{% endblock %}

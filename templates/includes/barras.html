@@ -1,0 +1,12 @@
+{% load humanize %}
+{# Barras de resultados del prototipo: conteo, porcentaje y opción líder #}
+<div class="bars">
+  {% for f in filas %}
+    <div class="bar-row{% if f.lider %} lead{% endif %}">
+      <div class="lab"><span>{{ f.nombre }}{% if not f.activa %} (inactiva){% endif %}</span><span>{{ f.votos|intcomma }} voto{{ f.votos|pluralize }} · {{ f.porcentaje }} %</span></div>
+      <div class="bar" role="img" aria-label="{{ f.nombre }}: {{ f.porcentaje }} por ciento"><i style="width:{{ f.porcentaje }}%"></i></div>
+    </div>
+  {% empty %}
+    <p class="note">Esta votación aún no tiene opciones.</p>
+  {% endfor %}
+</div>

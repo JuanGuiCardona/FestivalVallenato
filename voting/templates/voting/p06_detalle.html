@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{# P-06 Detalle de la votación · CU-03, CU-05 · RF-06, RF-10 · 12.1 «Claridad de reglas» #}
+{% block doc_titulo %}{{ v.titulo }}{% endblock %}
+{% block pantalla %}P-06{% endblock %}{% block aria %}P-06 Detalle de la votación{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'voting:por_categoria' v.categoria_id %}">← Atrás</a>{% endblock %}
+{% block titulo %}Detalle de la votación{% endblock %}
+{% block body %}
+  <div class="banner" style="min-height:112px"><strong>{{ v.titulo }}</strong><span>{{ v.categoria.nombre }}</span></div>
+  <h3>{{ v.titulo }}</h3>
+  <p class="sub">{{ v.descripcion }}</p>
+  <p class="sub" style="color:var(--text)">
+    <b>Estado:</b> {% include "includes/chip.html" with estado=v.estado %}<br>
+    {% if v.fecha_apertura and v.estado == "proxima" %}<b>Apertura:</b> {{ v.fecha_apertura|date:"j M Y, g:i A" }}<br>{% endif %}
+    <b>Cierre:</b> {% if v.fecha_cierre %}{% if v.estado == "cerrada" %}Cerrada el {{ v.fecha_cierre|date:"j M Y" }}{% else %}{{ v.fecha_cierre|date:"j M Y, g:i A" }}{% endif %}{% else %}Por definir*{% endif %}<br>
+    <b>Límite:</b> {{ v.texto_limite }}*<br>
+    <b>Opciones:</b> {{ opciones|length }}
+  </p>
+  {% if pista %}<p class="msg info">{{ pista }}</p>{% endif %}
+  <a class="btn primary" href="{% url 'voting:opciones' v.pk %}" {% if not puede_votar %}aria-disabled="true"{% endif %}>Ver opciones y votar</a>
+  <a class="btn secondary" href="{% url 'results:votacion' v.pk %}" {% if not v.resultados_publicos %}aria-disabled="true"{% endif %}>Ver resultados*</a>
+  <p class="note">* Reglas preliminares, sujetas a validación con el cliente.</p>
+{% endblock %}

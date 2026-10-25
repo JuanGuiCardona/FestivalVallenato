@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{# P-05 Votaciones disponibles · CU-03 · RF-05 (también la usa CU-05 para «Resultados») #}
+{% block doc_titulo %}{{ titulo }}{% endblock %}
+{% block pantalla %}P-05{% endblock %}{% block aria %}P-05 {{ titulo }}{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{{ volver }}">← Atrás</a>{% endblock %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block body %}
+  <p class="sub" style="font-size:14px" id="p5-sub">{{ subtitulo }}</p>
+  <div class="list" id="vot-list">
+    {% for v in votaciones %}
+      <a class="card" href="{% if modo_resultados %}{% url 'results:votacion' v.pk %}{% else %}{% url 'voting:detalle' v.pk %}{% endif %}">
+        <span class="t">{{ v.titulo }}</span>
+        {% include "includes/chip.html" with estado=v.estado %}
+        <small>{% if v.estado == "proxima" and v.fecha_apertura %}Abre: {{ v.fecha_apertura|date:"j M Y, g:i A" }}{% elif v.estado == "cerrada" %}Cerrada{% if v.fecha_cierre %} el {{ v.fecha_cierre|date:"j M Y" }}{% endif %}{% elif v.fecha_cierre %}Cierra: {{ v.fecha_cierre|date:"j M Y, g:i A" }}{% endif %}</small>
+        {% if v.pk in ya_votadas %}<small>Ya votaste</small>{% endif %}
+      </a>
+    {% empty %}
+      <p class="note">{{ vacio }}</p>
+    {% endfor %}
+  </div>
+{% endblock %}
+{% block tabbar %}{% include "includes/tabbar.html" with activo=tab %}{% endblock %}

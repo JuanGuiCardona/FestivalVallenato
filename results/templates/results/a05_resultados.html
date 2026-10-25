@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load humanize %}
+{# A-05 Consulta de resultados · CU-09 · RF-15, RF-16, RF-17 · RNF-14 #}
+{% block doc_titulo %}Resultados{% endblock %}
+{% block pantalla %}A-05{% endblock %}{% block aria %}A-05 Consulta de resultados{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'results:panel' %}">← Panel</a>{% endblock %}
+{% block titulo %}Resultados{% endblock %}
+{% block body %}
+  <form method="get">
+    <label for="res-vot">Votación</label>
+    <select id="res-vot" name="votacion" data-autosubmit>
+      {% for x in votaciones %}<option value="{{ x.pk }}" {% if v and x.pk == v.pk %}selected{% endif %}>{{ x.titulo }} · {{ x.get_estado_display }}</option>{% empty %}<option value="">Sin votaciones</option>{% endfor %}
+    </select>
+    {% if ver_auditoria %}<input type="hidden" name="auditoria" value="1">{% endif %}
+    <noscript><button class="btn secondary sm" type="submit">Ver</button></noscript>
+  </form>
+  {% if v %}
+    <p class="sub">Con corte a {{ corte|date:"j M Y, g:i A" }} · Resultados públicos: {{ v.get_resultados_visibles_display|lower }}*</p>
+    {% include "includes/barras.html" %}
+    <h3 id="a-total">Total de votos: {{ total|intcomma }}</h3>
+    <a class="btn secondary" href="{% url 'results:exportar' v.pk %}">Exportar CSV*</a>
+  {% endif %}
+  <a class="btn secondary" href="?{% if v %}votacion={{ v.pk }}{% endif %}{% if not ver_auditoria %}&auditoria=1{% endif %}" aria-expanded="{% if ver_auditoria %}true{% else %}false{% endif %}">{% if ver_auditoria %}Ocultar registro de auditoría{% else %}Ver registro de auditoría{% endif %}</a>
+  {% if ver_auditoria %}
+    <div id="audit-box">
+      <form class="filtros" method="get">
+        {% if v %}<input type="hidden" name="votacion" value="{{ v.pk }}">{% endif %}
+        <input type="hidden" name="auditoria" value="1">
+        <div><label for="au-desde">Desde</label><input id="au-desde" type="date" name="desde" value="{{ f.desde }}"></div>
+        <div><label for="au-hasta">Hasta</label><input id="au-hasta" type="date" name="hasta" value="{{ f.hasta }}"></div>
+        <div><label for="au-usuario">Usuario</label><input id="au-usuario" type="text" name="usuario" value="{{ f.usuario }}" placeholder="correo o «sistema»"></div>
+        <div><label for="au-accion">Acción</label><input id="au-accion" type="text" name="accion" value="{{ f.accion }}" placeholder="Ej.: voto, apertura"></div>
+        <button class="btn primary sm" type="submit">Filtrar</button>
+      </form>
+      <p class="note" style="margin-bottom:8px">{{ total_registros|intcomma }} registro{{ total_registros|pluralize }}{% if total_registros > 200 %} · se muestran los 200 más recientes{% endif %}. Los registros no se pueden editar (RNF-14).</p>
+      <ul class="audit" id="audit-list">
+        {% for r in registros %}
+          <li><time>{{ r.fecha_hora|date:"j M Y, g:i:s A" }}</time><b>{{ r.autor }}</b> · {{ r.accion }}{% if r.detalle %} <span class="det">— {{ r.detalle }}</span>{% endif %}</li>
+        {% empty %}
+          <li>No hay registros para este filtro.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load humanize %}
+{# A-01 Panel principal · CU-06 a CU-09 · RF-11 a RF-16 #}
+{% block doc_titulo %}Panel de administración{% endblock %}
+{% block pantalla %}A-01{% endblock %}{% block aria %}A-01 Panel principal{% endblock %}
+{% block titulo %}Panel de administración{% endblock %}
+{% block hdr_der %}{% include "includes/logout.html" with clase="side right" boton="salir" texto="Salir" %}{% endblock %}
+{% block body %}
+  <div id="stats">
+    <div class="stat"><span>Edición vigente</span><b>{{ edicion.anio|default:"—" }}</b></div>
+    <div class="stat"><span>Votaciones abiertas</span><b>{{ abiertas|intcomma }}</b></div>
+    <div class="stat"><span>Votos totales</span><b>{{ votos|intcomma }}</b></div>
+    <div class="stat"><span>Usuarios registrados</span><b>{{ usuarios|intcomma }}</b></div>
+  </div>
+  <h3 style="margin-top:14px">Accesos rápidos</h3>
+  <a class="btn secondary" href="{% url 'catalog:admin_categorias' %}">Ediciones y categorías</a>
+  <a class="btn secondary" href="{% url 'voting:admin_votaciones' %}">Votaciones</a>
+  <a class="btn secondary" href="{% url 'voting:admin_opciones' %}">Opciones</a>
+  <a class="btn secondary" href="{% url 'results:admin_resultados' %}">Resultados</a>
+  <a class="link" href="{% url 'catalog:inicio' %}">Ver el sitio público</a>
+{% endblock %}

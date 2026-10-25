@@ -1,0 +1,2 @@
+{# Cerrar sesión siempre por POST (protección CSRF, RNF-03) #}
+<form method="post" action="{% url 'accounts:logout' %}" class="{{ clase|default:'' }}">{% csrf_token %}<button class="{{ boton|default:'btn secondary' }}" type="submit">{{ texto|default:"Cerrar sesión" }}</button></form>

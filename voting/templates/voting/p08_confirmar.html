@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{# P-08 Confirmación del voto · CU-04 pasos 5-6 · RF-07, RF-08 · RN-07 #}
+{% block doc_titulo %}Confirmar voto{% endblock %}
+{% block pantalla %}P-08{% endblock %}{% block aria %}P-08 Confirmación del voto{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'voting:opciones' v.pk %}">← Atrás</a>{% endblock %}
+{% block titulo %}Confirmar voto{% endblock %}
+{% block body %}
+  <h3>Revisa tu elección</h3>
+  <div class="summary" id="summary">Votación: <b>{{ v.titulo }}</b><br>Opción elegida: <b>{{ opcion.nombre }}</b></div>
+  <p class="warn">Una vez confirmado, el voto no podrá modificarse*</p>
+  <form method="post" data-un-envio>
+    {% csrf_token %}
+    <button class="btn primary" type="submit" data-texto-enviando="Registrando voto…">Confirmar voto</button>
+  </form>
+  <a class="btn secondary" href="{% url 'voting:opciones' v.pk %}">Volver</a>
+{% endblock %}
