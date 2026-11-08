@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from catalog.models import Categoria
+from catalog.models import Categoria, Edicion
 
 
 class Votacion(models.Model):
@@ -118,7 +118,7 @@ class Votacion(models.Model):
         n = self.max_votos_por_votante
         votos = "1 voto" if n == 1 else f"{n} votos"
         cuando = "por día" if self.periodicidad_voto == self.DIARIA else "por persona"
-        return f"{votos} {cuando}"
+        return f"{votos} {cuando} en la categoría"
 
 
 class Opcion(models.Model):
@@ -164,10 +164,16 @@ class Voto(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, db_column="id_usuario", related_name="votos")
     votacion = models.ForeignKey(Votacion, on_delete=models.PROTECT, db_column="id_votacion", related_name="votos")
     opcion = models.ForeignKey(Opcion, on_delete=models.PROTECT, db_column="id_opcion", related_name="votos")
+    # Regla de unicidad del enunciado: un voto por usuario, categoría y edición.
+    # Se copian de la votación al guardar, para que MySQL pueda exigir la regla.
+    categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT, db_column="id_categoria",
+                                  related_name="votos", editable=False)
+    edicion = models.ForeignKey(Edicion, on_delete=models.PROTECT, db_column="id_edicion",
+                                related_name="votos", editable=False)
     fecha_hora = models.DateTimeField(default=timezone.now)
     estado = models.CharField(max_length=10, choices=ESTADOS, default=REGISTRADO)
     # Apoyo a la regla de unicidad (11.2): periodo = "UNICA" o la fecha del día;
-    # numero = 1..máximo de votos por votante en ese periodo.
+    # numero = 1..máximo de votos por votante en la categoría y ese periodo.
     periodo = models.CharField(max_length=10)
     numero = models.PositiveSmallIntegerField(default=1)
     codigo = models.CharField("código de comprobante", max_length=20, unique=True, default=nuevo_codigo)
@@ -178,8 +184,10 @@ class Voto(models.Model):
         verbose_name = "voto"
         verbose_name_plural = "votos"
         constraints = [
-            # RNF-05 / R-07: MySQL impide votos duplicados aunque lleguen al mismo tiempo.
-            models.UniqueConstraint(fields=["usuario", "votacion", "periodo", "numero"], name="voto_unico_por_periodo"),
+            # Un voto por usuario, categoría y edición (RN-06, RNF-05 / R-07). MySQL impide
+            # el duplicado aunque las solicitudes lleguen al mismo tiempo o desde dos sesiones.
+            models.UniqueConstraint(fields=["usuario", "edicion", "categoria", "periodo", "numero"],
+                                    name="voto_unico_categoria_edicion"),
         ]
         indexes = [models.Index(fields=["votacion", "opcion"], name="voto_conteo_idx")]
 
@@ -190,4 +198,48 @@ class Voto(models.Model):
         # 11.2 «Coherencia de la opción»: la opción debe ser de la misma votación.
         if self.opcion.votacion_id != self.votacion_id:
             raise ValidationError("La opción no pertenece a esta votación.")
+        # La categoría y la edición siempre son las de la votación.
+        self.categoria_id = self.votacion.categoria_id
+        self.edicion_id = self.votacion.categoria.edicion_id
         super().save(*args, **kwargs)
+
+
+class Configuracion(models.Model):
+    """A-06 Configuración general: valores que el administrador cambia desde la interfaz.
+
+    Hay una sola fila. Mientras no se guarde, se usan los valores del archivo .env
+    (LOGIN_MAX_INTENTOS, LOGIN_BLOQUEO_SEGUNDOS, VOTOS_MAX_POR_MINUTO) y los valores
+    por defecto de la votación.
+    """
+    id_configuracion = models.AutoField(primary_key=True)
+    # Seguridad (RNF-04, preliminar*)
+    max_intentos_login = models.PositiveSmallIntegerField("intentos de inicio de sesión antes del bloqueo", default=5)
+    minutos_bloqueo = models.PositiveSmallIntegerField("minutos de bloqueo temporal", default=5)
+    votos_por_minuto = models.PositiveSmallIntegerField("solicitudes de voto por minuto por persona", default=10)
+    # Valores con los que se crean las votaciones nuevas (RN-06, RN-11, preliminares*)
+    max_votos_por_defecto = models.PositiveSmallIntegerField("votos por persona en cada categoría", default=1)
+    periodicidad_por_defecto = models.CharField("periodicidad del voto", max_length=10,
+                                                choices=Votacion.PERIODICIDADES, default=Votacion.UNICA)
+    resultados_por_defecto = models.CharField("resultados visibles", max_length=10,
+                                              choices=Votacion.VISIBILIDADES, default=Votacion.RES_CIERRE)
+    fecha_actualizacion = models.DateTimeField("última actualización", auto_now=True)
+
+    class Meta:
+        db_table = "configuracion"
+        verbose_name = "configuración general"
+        verbose_name_plural = "configuración general"
+
+    def __str__(self):
+        return "Configuración general"
+
+    @classmethod
+    def actual(cls):
+        """La configuración guardada o, si no hay, una con los valores del .env (sin guardar)."""
+        guardada = cls.objects.first()
+        if guardada:
+            return guardada
+        return cls(
+            max_intentos_login=settings.LOGIN_MAX_INTENTOS,
+            minutos_bloqueo=max(1, settings.LOGIN_BLOQUEO_SEGUNDOS // 60),
+            votos_por_minuto=settings.VOTOS_MAX_POR_MINUTO,
+        )

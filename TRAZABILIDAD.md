@@ -28,6 +28,9 @@ Convenciones (las mismas del documento):
 | RF-16 Auditoría de acciones críticas | CU-09 | A-05 | `audit/services.py → registrar` (se llama desde todas las vistas) | Registro_Auditoria | `test_paso3_filtros_de_auditoria`, `test_rnf14_*` |
 | RF-17 Exportar resultados\* | CU-09 | A-05 | `results.exportar` (CSV preliminar) | Voto, Opción | `test_rf17_exportar_csv_...` |
 | (Panel A-01) | CU-06 a CU-09 | A-01 → `results/a01_panel.html` | `results.panel` | — | `test_panel_con_indicadores_reales` |
+| Categorías votadas por el usuario (Entrega 3) | CU-04 | P-10 → `voting/p10_participacion.html` | `voting.mi_participacion` | Voto, Categoría | `voting.MiParticipacionTests` |
+| API GET de categorías y opciones (Entrega 3) | CU-03 | `GET /api/categorias/` (JSON) | `api/views.py → categorias`, `categoria` | Edición, Categoría, Votación, Opción | `api.ApiCategoriasTests` |
+| Configuración general desde la interfaz (Entrega 3) | CU-07 | A-06 → `voting/a06_configuracion.html` | `voting.admin_configuracion` | Configuracion | `voting.ConfiguracionGeneralTests` |
 
 ## 2. Reglas de negocio
 
@@ -38,7 +41,7 @@ Convenciones (las mismas del documento):
 | RN-03 Opción en una sola votación | `Opcion.votacion` + restricción `opcion_unica_por_votacion` | `test_crear_y_4a_nombre_duplicado` |
 | RN-04 Solo vota si está abierta y dentro de fechas | `Votacion.recibe_votos`, `services.sincronizar_estados` | `test_2b_*`, `test_rn04_*`, `test_programar_y_apertura_automatica` |
 | RN-05 Votar con cuenta autenticada\* | `voting.opciones` / `confirmar` → redirige a P-03 | `test_2a_sin_sesion_pasa_por_login_y_regresa` |
-| RN-06 Límite de votos configurable (única vez, por día)\* | `Votacion.max_votos_por_votante`, `periodicidad_voto`; restricción `voto_unico_por_periodo` | `test_rn06_*`, `test_7b_*`, concurrencia |
+| RN-06 Un voto por usuario, categoría y edición (límite y periodicidad configurables\*) | `Voto.categoria`, `Voto.edicion`; restricción `voto_unico_categoria_edicion`; `services.emitir_voto` | `voting.UnicidadPorCategoriaTests`, `test_rn06_*`, `test_7b_*`, concurrencia |
 | RN-07 El voto confirmado no se modifica\* | No hay pantalla de edición; `VotoAdmin` de solo lectura | `test_rn07_*` |
 | RN-08 Solo el administrador gestiona | `accounts/decorators.py → solo_administrador` | `test_rn08_solo_administrador` |
 | RN-09 Abrir con al menos 2 opciones activas | `voting.admin_votacion_estado`, `Votacion.sincronizar_estado` | `test_rn09_*` |
@@ -64,7 +67,7 @@ Convenciones (las mismas del documento):
 | RNF-13 Ley 1581 | Aceptación con fecha guardada en `usuario` |
 | RNF-14 Auditoría no editable | `RegistroAuditoriaAdmin` sin permisos de cambio ni borrado; sin pantallas de edición |
 | RNF-15 Apps modulares | `accounts`, `catalog`, `voting`, `results`, `audit` (sección 15.4) |
-| RNF-16 Configurable sin tocar código | Fechas, límite, periodicidad y visibilidad se configuran en A-03 |
+| RNF-16 Configurable sin tocar código | Ediciones y categorías en A-02; votaciones (fechas, límite, periodicidad, visibilidad) en A-03; opciones en A-04; seguridad y reglas iniciales en A-06 (tabla `configuracion`) |
 
 ## 4. Modelo de datos: diagrama → tablas MySQL
 
@@ -74,19 +77,20 @@ Convenciones (las mismas del documento):
 | Categoría | `categoria` | id_categoria, id_edicion, nombre, descripcion, orden, estado | — |
 | Votación | `votacion` | id_votacion, id_categoria, titulo, descripcion, fecha_apertura, fecha_cierre, estado, max_votos_por_votante, periodicidad_voto, resultados_visibles | fecha_creacion (orden y auditoría) |
 | Opción | `opcion` | id_opcion, id_votacion, nombre, descripcion, orden, estado | — |
-| Voto | `voto` | id_voto, id_usuario, id_votacion, id_opcion, fecha_hora, estado | `periodo` y `numero` (restricción única de la sección 11.2), `codigo` (comprobante, RF-09) |
+| Voto | `voto` | id_voto, id_usuario, id_votacion, id_opcion, fecha_hora, estado | `id_categoria` e `id_edicion` (un voto por usuario, categoría y edición: restricción `voto_unico_categoria_edicion`), `periodo` y `numero` (11.2), `codigo` (comprobante, RF-09) |
 | Rol | `rol` | id_rol, nombre | — |
 | Usuario | `usuario` | id_usuario, id_rol, nombre, correo, contraseña (`password`, con hash), estado | acepta_datos y fecha_aceptacion (11.2, RN-12), ciudad\* (dato adicional del prototipo), fecha_registro, last_login, is_superuser (internos de Django) |
 | Registro_Auditoria | `registro_auditoria` | id_registro, id_usuario, accion, fecha_hora, detalle | ip (RNF-04: detectar patrones) |
+| (nueva) Configuración | `configuracion` | — | Una fila con la configuración general editable en A-06 |
 
 ## 5. Decisiones del equipo marcadas como preliminares\*
 
-Se pueden cambiar sin tocar el código (desde A-03, A-02 o el archivo `.env`) cuando el cliente las confirme:
+Se pueden cambiar sin tocar el código (desde A-02, A-03 o A-06) cuando el cliente las confirme:
 
 - Límite de votos y periodicidad (RN-06). Valor por defecto: 1 voto, una única vez.
 - Visibilidad de resultados (RN-11). Valor por defecto: al cierre.
-- Bloqueo por intentos: 5 intentos y 5 minutos (`.env`).
-- Límite de 10 votos por minuto por persona (`.env`).
+- Bloqueo por intentos: 5 intentos y 5 minutos (A-06; valor inicial en `.env`).
+- Límite de 10 votos por minuto por persona (A-06; valor inicial en `.env`).
 - Solo una edición vigente a la vez.
 - Las cuentas de administrador no votan (separación de roles, riesgo R-09).
 - Con votos registrados no se cambian la categoría, la apertura, el límite ni la periodicidad (CU-07 2a).

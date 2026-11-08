@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST
 
 from accounts.decorators import solo_administrador
 from audit.services import registrar
-from voting.models import Votacion
+from voting.models import Votacion, Voto
 from voting.services import sincronizar_estados, votaciones_publicas
 
 from .forms import CategoriaForm, EdicionForm, primer_error
@@ -34,7 +34,11 @@ def categorias(request):
     if edicion:
         lista = (Categoria.objects.filter(edicion=edicion, estado=Categoria.ACTIVA)
                  .annotate(disponibles=Count("votaciones", filter=~Q(votaciones__estado=Votacion.BORRADOR))))
-    return render(request, "catalog/p04_categorias.html", {"edicion": edicion, "categorias": lista})
+    votadas = set()
+    if edicion and request.user.is_authenticated:
+        votadas = set(Voto.objects.filter(usuario=request.user, edicion=edicion, estado=Voto.REGISTRADO)
+                      .values_list("categoria_id", flat=True))
+    return render(request, "catalog/p04_categorias.html", {"edicion": edicion, "categorias": lista, "votadas": votadas})
 
 
 # ====================================================================== administración

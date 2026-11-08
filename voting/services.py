@@ -2,7 +2,6 @@
 
 Todas las pantallas usan estas funciones, así cada regla vive en un solo lugar.
 """
-from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -11,7 +10,7 @@ from django.utils import timezone
 from audit.services import registrar
 from catalog.models import Categoria, Edicion
 
-from .models import Opcion, Votacion, Voto
+from .models import Configuracion, Opcion, Votacion, Voto
 
 
 class ReglaVoto(Exception):
@@ -55,31 +54,63 @@ def votaciones_publicas():
             .select_related("categoria"))
 
 
+def _votos_de_la_categoria(usuario, votacion):
+    """Votos del usuario en la misma categoría y edición que la votación."""
+    return Voto.objects.filter(usuario=usuario, categoria_id=votacion.categoria_id,
+                               edicion_id=votacion.categoria.edicion_id, estado=Voto.REGISTRADO)
+
+
 def votos_usados(usuario, votacion):
+    """Votos que ya usó en la categoría de esta votación, en el periodo actual."""
     if not usuario.is_authenticated:
         return 0
-    return Voto.objects.filter(usuario=usuario, votacion=votacion, periodo=votacion.periodo_actual(),
-                               estado=Voto.REGISTRADO).count()
+    return _votos_de_la_categoria(usuario, votacion).filter(periodo=votacion.periodo_actual()).count()
 
 
 def alcanzo_limite(usuario, votacion):
-    """RN-06: ¿ya usó todos los votos permitidos en el periodo actual?"""
+    """Un voto por usuario, categoría y edición (RN-06; el límite y la periodicidad son configurables*)."""
     return usuario.is_authenticated and votos_usados(usuario, votacion) >= votacion.max_votos_por_votante
 
 
+def voto_en_la_categoria(usuario, votacion):
+    """El último voto del usuario en la categoría de esta votación (para el mensaje «Ya votaste»)."""
+    if not usuario.is_authenticated:
+        return None
+    return (_votos_de_la_categoria(usuario, votacion).filter(periodo=votacion.periodo_actual())
+            .select_related("votacion").first())
+
+
 def ids_con_limite_alcanzado(usuario, votaciones):
-    """Para marcar «Ya votaste» en los listados sin hacer una consulta por tarjeta."""
+    """Para marcar «Ya votaste» en los listados sin hacer una consulta por tarjeta.
+
+    Como la regla es por categoría, se marcan todas las votaciones de una categoría
+    en la que el usuario ya usó su voto.
+    """
     if not usuario.is_authenticated:
         return set()
     votaciones = list(votaciones)
     if not votaciones:
         return set()
     conteo = {}
-    for votacion_id, periodo in (Voto.objects
-                                 .filter(usuario=usuario, votacion__in=votaciones, estado=Voto.REGISTRADO)
-                                 .values_list("votacion_id", "periodo")):
-        conteo[(votacion_id, periodo)] = conteo.get((votacion_id, periodo), 0) + 1
-    return {v.pk for v in votaciones if conteo.get((v.pk, v.periodo_actual()), 0) >= v.max_votos_por_votante}
+    categorias = {v.categoria_id for v in votaciones}
+    for categoria_id, periodo in (Voto.objects
+                                  .filter(usuario=usuario, categoria_id__in=categorias, estado=Voto.REGISTRADO)
+                                  .values_list("categoria_id", "periodo")):
+        conteo[(categoria_id, periodo)] = conteo.get((categoria_id, periodo), 0) + 1
+    return {v.pk for v in votaciones
+            if conteo.get((v.categoria_id, v.periodo_actual()), 0) >= v.max_votos_por_votante}
+
+
+def participacion(usuario, edicion):
+    """Categorías de la edición en las que el usuario ya votó, con su voto (pantalla «Mi participación»)."""
+    if not usuario.is_authenticated or edicion is None:
+        return {}
+    votos = (Voto.objects.filter(usuario=usuario, edicion=edicion, estado=Voto.REGISTRADO)
+             .select_related("votacion", "categoria").order_by("fecha_hora"))
+    resultado = {}
+    for voto in votos:
+        resultado.setdefault(voto.categoria_id, []).append(voto)
+    return resultado
 
 
 # ------------------------------------------------------------------ emitir voto
@@ -88,7 +119,8 @@ def _limite_de_solicitudes(usuario):
     llave = f"votos-min:{usuario.pk}"
     cuenta = cache.get(llave, 0) + 1
     cache.set(llave, cuenta, 60)
-    return cuenta > settings.VOTOS_MAX_POR_MINUTO
+    # El límite se configura desde la interfaz (A-06); si no se ha guardado, usa el .env.
+    return cuenta > Configuracion.actual().votos_por_minuto
 
 
 def emitir_voto(request, votacion_id, opcion_id):
@@ -119,17 +151,19 @@ def emitir_voto(request, votacion_id, opcion_id):
         except (Opcion.DoesNotExist, ValueError, TypeError):
             raise ReglaVoto("opcion", "Selecciona una opción para continuar.")
 
+        # Un voto por usuario, categoría y edición: cuenta los votos de toda la categoría.
         periodo = votacion.periodo_actual()
-        usados = Voto.objects.filter(usuario=usuario, votacion=votacion, periodo=periodo).count()
+        usados = votos_usados(usuario, votacion)
         if usados >= votacion.max_votos_por_votante:
-            raise ReglaVoto("ya_voto", "Ya votaste en esta votación.")
+            raise ReglaVoto("ya_voto", "Ya votaste en esta categoría.")
         try:
             with transaction.atomic():
                 voto = Voto.objects.create(usuario=usuario, votacion=votacion, opcion=opcion,
                                            periodo=periodo, numero=usados + 1)
         except IntegrityError:
-            # Otra solicitud del mismo votante ganó la carrera (CU-04 7b).
-            raise ReglaVoto("ya_voto", "Ya votaste en esta votación.")
+            # Otra solicitud del mismo votante ganó la carrera (CU-04 7b): la restricción
+            # voto_unico_categoria_edicion de MySQL rechazó el duplicado.
+            raise ReglaVoto("ya_voto", "Ya votaste en esta categoría.")
 
         # RN-13 con secreto del voto: se audita que votó, nunca por cuál opción.
         registrar(request, "Voto registrado", detalle=f"Votación «{votacion.titulo}» · comprobante {voto.codigo}")

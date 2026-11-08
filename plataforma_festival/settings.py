@@ -24,6 +24,9 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
 
+# Direcciones https desde las que se aceptan formularios (por ejemplo, un túnel o el servidor publicado).
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+
 if not SECRET_KEY:
     if DEBUG:
         SECRET_KEY = "solo-para-desarrollo-cambiar-en-el-archivo-env"
@@ -47,6 +50,7 @@ INSTALLED_APPS = [
     "voting",     # votaciones, opciones y votos (CU-04, CU-07, CU-08)
     "results",    # resultados y panel (CU-05, CU-09)
     "audit",      # registro de auditoría (RF-16)
+    "api",        # API de consulta GET /api/categorias/ (JSON)
 ]
 
 MIDDLEWARE = [

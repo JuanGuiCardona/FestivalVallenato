@@ -1,12 +1,13 @@
 {% extends "base.html" %}
-{# P-09 Resultado o mensaje posterior · CU-04 7a · RN-06 #}
+{# P-09 Resultado o mensaje posterior · CU-04 7a · RN-06: un voto por usuario, categoría y edición #}
 {% block doc_titulo %}Ya votaste{% endblock %}
 {% block pantalla %}P-09{% endblock %}{% block aria %}P-09 Resultado o mensaje{% endblock %}
 {% block titulo %}Ya votaste{% endblock %}
 {% block body %}
-  <div class="ok-box info">Ya votaste en esta votación.<br>No se registró un voto nuevo.</div>
-  <p class="sub">{% if v.periodicidad_voto == "diaria" %}El límite es {{ v.texto_limite }}*. Podrás volver a votar mañana.{% else %}Solo se registra{% if v.max_votos_por_votante == 1 %} un voto por persona{% else %}n {{ v.max_votos_por_votante }} votos por persona{% endif %} en cada votación*.{% endif %}</p>
-  {% if v.resultados_publicos %}<a class="btn primary" href="{% url 'results:votacion' v.pk %}">Ver resultados*</a>{% endif %}
-  <a class="btn {% if v.resultados_publicos %}secondary{% else %}primary{% endif %}" href="{% url 'voting:por_categoria' v.categoria_id %}">Ver otras votaciones</a>
-  <a class="btn secondary" href="{% url 'catalog:inicio' %}">Ir al inicio</a>
+  <div class="ok-box info">Ya votaste en la categoría {{ v.categoria.nombre }}.<br>No se registró un voto nuevo.</div>
+  {% if voto_previo %}<p class="sub">Tu voto: {{ voto_previo.votacion.titulo }} · {{ voto_previo.fecha_hora|date:"j M Y, g:i A" }} · comprobante <span class="code">{{ voto_previo.codigo }}</span></p>{% endif %}
+  <p class="sub">{% if v.periodicidad_voto == "diaria" %}El límite es {{ v.texto_limite }}*. Podrás volver a votar mañana.{% else %}Solo se registra{% if v.max_votos_por_votante == 1 %} un voto por persona{% else %}n {{ v.max_votos_por_votante }} votos por persona{% endif %} en cada categoría de la edición*. Puedes participar en las demás categorías.{% endif %}</p>
+  <a class="btn primary" href="{% url 'voting:mi_participacion' %}">Ver mi participación</a>
+  {% if v.resultados_publicos %}<a class="btn secondary" href="{% url 'results:votacion' v.pk %}">Ver resultados*</a>{% endif %}
+  <a class="btn secondary" href="{% url 'catalog:categorias' %}">Ver otras categorías</a>
 {% endblock %}

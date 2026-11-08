@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{# A-06 Configuración general · RNF-04, RN-06, RN-11 (preliminares*) · se guarda en la tabla configuracion #}
+{% block doc_titulo %}Configuración general{% endblock %}
+{% block pantalla %}A-06{% endblock %}{% block aria %}A-06 Configuración general{% endblock %}
+{% block hdr_izq %}<a class="side left" href="{% url 'results:panel' %}">← Panel</a>{% endblock %}
+{% block titulo %}Configuración general{% endblock %}
+{% block body %}
+  <p class="sub">Estos valores se guardan en MySQL y se cambian aquí, sin editar el código ni el archivo .env.{% if not guardada %} Mientras no los guardes, se usan los del archivo .env.{% endif %}</p>
+  <form class="edit-form" method="post">
+    {% csrf_token %}
+    <div class="card">
+      <span class="t">Seguridad*</span>
+      {% for f in form %}{% if f.name == "max_intentos_login" or f.name == "minutos_bloqueo" or f.name == "votos_por_minuto" %}
+        <label for="{{ f.id_for_label }}">{{ f.label|capfirst }}</label>{{ f }}
+      {% endif %}{% endfor %}
+    </div>
+    <div class="card">
+      <span class="t">Reglas iniciales de las votaciones nuevas*</span>
+      {% for f in form %}{% if f.name == "max_votos_por_defecto" or f.name == "periodicidad_por_defecto" or f.name == "resultados_por_defecto" %}
+        <label for="{{ f.id_for_label }}">{{ f.label|capfirst }}</label>{{ f }}
+      {% endif %}{% endfor %}
+      <p class="note">Cada votación se puede ajustar después en «Votaciones → Configurar». La regla general es un voto por usuario en cada categoría de la edición.</p>
+    </div>
+    <button class="btn primary" type="submit">Guardar configuración</button>
+  </form>
+  <p class="note">Las ediciones, categorías, votaciones y opciones se crean desde sus propias pantallas del panel. * Reglas preliminares pendientes de validación con el cliente.</p>
+{% endblock %}

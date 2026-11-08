@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{# P-10 Mi participación · categorías votadas por el usuario en la edición vigente (un voto por categoría y edición) #}
+{% block doc_titulo %}Mi participación{% endblock %}
+{% block pantalla %}P-10{% endblock %}{% block aria %}P-10 Mi participación{% endblock %}
+{% block titulo %}Mi participación{% endblock %}
+{% block hdr_der %}{% include "includes/logout.html" with clase="side right" boton="salir" texto="Salir" %}{% endblock %}
+{% block body %}
+  <p class="sub" style="font-size:14px">{{ user.nombre }}{% if edicion %} · Edición {{ edicion.anio }}{% endif %}</p>
+  {% if edicion %}
+    <p class="sub">Votaste en {{ votadas }} de {{ categorias|length }} categoría{{ categorias|length|pluralize }}.</p>
+    <div class="list" id="part-list">
+      {% for c in categorias %}
+        <a class="card" href="{% url 'voting:por_categoria' c.categoria.pk %}">
+          <span class="t">{{ c.categoria.nombre }}</span>
+          {% if c.votos %}<span class="chip abierta">Votada</span>{% else %}<span class="chip proxima">Pendiente</span>{% endif %}
+          {% for voto in c.votos %}
+            <small>{{ voto.votacion.titulo }} · {{ voto.fecha_hora|date:"j M Y, g:i A" }} · {{ voto.codigo }}</small>
+          {% empty %}
+            <small>Aún no has votado en esta categoría.</small>
+          {% endfor %}
+        </a>
+      {% empty %}
+        <p class="note">Aún no hay categorías publicadas.</p>
+      {% endfor %}
+    </div>
+    <p class="note">Por privacidad no se muestra la opción elegida: tu voto es secreto.</p>
+  {% else %}
+    <p class="note">No hay una edición vigente.</p>
+  {% endif %}
+{% endblock %}
+{% block tabbar %}{% include "includes/tabbar.html" with activo="Perfil" %}{% endblock %}

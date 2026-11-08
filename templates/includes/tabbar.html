@@ -3,5 +3,5 @@
   <a href="{% url 'catalog:inicio' %}" {% if activo == "Inicio" %}aria-current="page"{% endif %}>Inicio</a>
   <a href="{% url 'catalog:categorias' %}" {% if activo == "Categorías" %}aria-current="page"{% endif %}>Categorías</a>
   <a href="{% url 'results:publicos' %}" {% if activo == "Resultados" %}aria-current="page"{% endif %}>Resultados</a>
-  <a href="{% url 'accounts:login' %}" {% if activo == "Perfil" %}aria-current="page"{% endif %}>{% if user.is_authenticated %}Perfil{% else %}Ingresar{% endif %}</a>
+  {% if user.is_authenticated and user.es_administrador %}<a href="{% url 'results:panel' %}">Panel</a>{% elif user.is_authenticated %}<a href="{% url 'voting:mi_participacion' %}" {% if activo == "Perfil" %}aria-current="page"{% endif %}>Mis votos</a>{% else %}<a href="{% url 'accounts:login' %}" {% if activo == "Perfil" %}aria-current="page"{% endif %}>Ingresar</a>{% endif %}
 </nav>

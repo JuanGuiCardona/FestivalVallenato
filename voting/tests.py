@@ -17,7 +17,9 @@ from audit.models import RegistroAuditoria
 from plataforma_festival.fabrica_pruebas import CLAVE, crear_base, crear_usuario, crear_votacion
 
 from . import services
-from .models import Opcion, Votacion, Voto
+from catalog.models import Categoria
+
+from .models import Configuracion, Opcion, Votacion, Voto
 
 
 class BaseVoto(TestCase):
@@ -205,6 +207,37 @@ class CU04ConcurrenciaTests(TransactionTestCase):
         self.assertEqual(resultados.count("ok"), 1, resultados)
         self.assertEqual(Voto.objects.filter(usuario=votante).count(), 1)
 
+    @override_settings(VOTOS_MAX_POR_MINUTO=1000)
+    def test_votos_simultaneos_en_votaciones_de_la_misma_categoria(self):
+        """Dos votaciones de la misma categoría a la vez: MySQL deja pasar solo un voto."""
+        cache.clear()
+        _, categoria, votacion = crear_base()
+        otra = crear_votacion(categoria, titulo="Mejor presentación en tarima")
+        votante = crear_usuario("doble@prueba.co")
+        barrera = threading.Barrier(8)
+        resultados = []
+
+        def intentar(v):
+            from django.db import connection as conexion_hilo
+            request = RequestFactory().post("/")
+            request.user = votante
+            barrera.wait()
+            try:
+                services.emitir_voto(request, v.pk, v.opciones.first().pk)
+                resultados.append("ok")
+            except services.ReglaVoto as e:
+                resultados.append(e.codigo)
+            finally:
+                conexion_hilo.close()
+
+        hilos = [threading.Thread(target=intentar, args=(votacion if i % 2 else otra,)) for i in range(8)]
+        for h in hilos:
+            h.start()
+        for h in hilos:
+            h.join()
+        self.assertEqual(resultados.count("ok"), 1, resultados)
+        self.assertEqual(Voto.objects.filter(usuario=votante, categoria=categoria).count(), 1)
+
 
 class CU07GestionVotacionesTests(BaseVoto):
     def setUp(self):
@@ -306,3 +339,132 @@ class CU08GestionOpcionesTests(BaseVoto):
         ultima = self.votacion.opciones.last()
         self.client.post(f"/panel/opciones/{ultima.pk}/mover/", {"direccion": "subir"})
         self.assertEqual(list(self.votacion.opciones.values_list("nombre", flat=True)), ["Opción A", "Opción C", "Opción B"])
+
+
+class UnicidadPorCategoriaTests(BaseVoto):
+    """Regla del enunciado: un voto por usuario, categoría y edición; se puede votar en otras categorías."""
+
+    def setUp(self):
+        super().setUp()
+        # Segunda votación de la MISMA categoría (Música) y una votación de OTRA categoría.
+        self.misma_cat = crear_votacion(self.categoria, titulo="Mejor presentación en tarima")
+        self.otra_categoria = Categoria.objects.create(edicion=self.edicion, nombre="Piquería", orden=1)
+        self.otra_cat = crear_votacion(self.otra_categoria, titulo="Mejor piquero")
+        self.entrar()
+
+    def test_no_puede_votar_dos_veces_en_la_misma_categoria(self):
+        self.votar()
+        # Al intentar elegir una opción en otra votación de Música, el sistema lo detiene.
+        r = self.client.post(f"/votaciones/{self.misma_cat.pk}/opciones/", {"opcion": self.misma_cat.opciones.first().pk})
+        self.assertRedirects(r, f"/votaciones/{self.misma_cat.pk}/ya-votaste/")
+        self.votar(self.misma_cat, self.misma_cat.opciones.first())
+        self.assertEqual(Voto.objects.filter(usuario=self.votante, categoria=self.categoria).count(), 1)
+        pagina = self.client.get(f"/votaciones/{self.misma_cat.pk}/ya-votaste/")
+        self.assertContains(pagina, "Ya votaste en la categoría Música")
+
+    def test_puede_votar_en_otra_categoria_de_la_misma_edicion(self):
+        self.votar()
+        r = self.votar(self.otra_cat, self.otra_cat.opciones.first())
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/comprobante/", r["Location"])
+        self.assertEqual(Voto.objects.filter(usuario=self.votante, edicion=self.edicion).count(), 2)
+
+    def test_dos_sesiones_del_mismo_usuario_no_duplican_el_voto(self):
+        """Iniciar sesión dos veces (dos navegadores o dispositivos) no permite un segundo voto."""
+        from django.test import Client
+        otra_sesion = Client()
+        otra_sesion.post("/ingresar/", {"correo": "votante@prueba.co", "clave": CLAVE})
+        # Ambas sesiones eligen opción antes de que alguna confirme.
+        self.client.post(f"/votaciones/{self.votacion.pk}/opciones/", {"opcion": self.opcion.pk})
+        otra_sesion.post(f"/votaciones/{self.misma_cat.pk}/opciones/", {"opcion": self.misma_cat.opciones.first().pk})
+        self.client.post(f"/votaciones/{self.votacion.pk}/confirmar/")
+        r = otra_sesion.post(f"/votaciones/{self.misma_cat.pk}/confirmar/")
+        self.assertRedirects(r, f"/votaciones/{self.misma_cat.pk}/ya-votaste/")
+        self.assertEqual(Voto.objects.filter(usuario=self.votante).count(), 1)
+
+    def test_mysql_rechaza_el_duplicado_por_categoria_y_edicion(self):
+        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion, periodo="UNICA", numero=1)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Voto.objects.create(usuario=self.votante, votacion=self.misma_cat, opcion=self.misma_cat.opciones.first(),
+                                periodo="UNICA", numero=1)
+
+    def test_el_voto_guarda_la_categoria_y_la_edicion_de_su_votacion(self):
+        self.votar(self.otra_cat, self.otra_cat.opciones.first())
+        voto = Voto.objects.get(usuario=self.votante)
+        self.assertEqual((voto.categoria, voto.edicion), (self.otra_categoria, self.edicion))
+
+    def test_listados_marcan_la_categoria_votada(self):
+        self.votar()
+        self.assertContains(self.client.get("/categorias/"), "Ya votaste en esta categoría", count=1)
+        self.assertContains(self.client.get(f"/categorias/{self.categoria.pk}/"), "Ya votaste", count=2)
+        detalle = self.client.get(f"/votaciones/{self.misma_cat.pk}/")
+        self.assertContains(detalle, "Ya votaste en esta categoría")
+        self.assertFalse(detalle.context["puede_votar"])
+
+
+class MiParticipacionTests(BaseVoto):
+    """Pantalla P-10: el votante ve las categorías en las que ya votó."""
+
+    def test_pide_iniciar_sesion(self):
+        r = self.client.get("/mi-participacion/")
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/ingresar/", r["Location"])
+
+    def test_muestra_categorias_votadas_y_pendientes_sin_la_opcion(self):
+        Categoria.objects.create(edicion=self.edicion, nombre="Piquería", orden=1)
+        self.entrar()
+        self.votar()
+        r = self.client.get("/mi-participacion/")
+        self.assertContains(r, "Votaste en 1 de 2 categorías")
+        self.assertContains(r, "Votada")
+        self.assertContains(r, "Pendiente")
+        self.assertContains(r, Voto.objects.get().codigo)
+        self.assertNotContains(r, self.opcion.nombre)  # voto secreto
+
+    def test_el_administrador_va_al_panel(self):
+        crear_usuario("admin@prueba.co", admin=True)
+        self.entrar("admin@prueba.co")
+        self.assertRedirects(self.client.get("/mi-participacion/"), "/panel/")
+
+
+class ConfiguracionGeneralTests(BaseVoto):
+    """A-06: la configuración básica se cambia desde la interfaz y queda en MySQL."""
+
+    DATOS = {"max_intentos_login": 3, "minutos_bloqueo": 10, "votos_por_minuto": 20,
+             "max_votos_por_defecto": 1, "periodicidad_por_defecto": "unica", "resultados_por_defecto": "vivo"}
+
+    def test_solo_el_administrador_entra(self):
+        self.entrar()
+        self.assertNotEqual(self.client.get("/panel/configuracion/").status_code, 200)
+
+    def test_guardar_configuracion_y_auditoria(self):
+        crear_usuario("admin@prueba.co", admin=True)
+        self.entrar("admin@prueba.co")
+        self.assertContains(self.client.get("/panel/configuracion/"), "Configuración general")
+        r = self.client.post("/panel/configuracion/", self.DATOS, follow=True)
+        self.assertContains(r, "Configuración guardada")
+        config = Configuracion.objects.get()
+        self.assertEqual((config.max_intentos_login, config.resultados_por_defecto), (3, "vivo"))
+        self.assertTrue(RegistroAuditoria.objects.filter(accion="Configuración general actualizada").exists())
+
+    def test_valores_fuera_de_rango_no_se_guardan(self):
+        crear_usuario("admin@prueba.co", admin=True)
+        self.entrar("admin@prueba.co")
+        self.client.post("/panel/configuracion/", dict(self.DATOS, max_intentos_login=0))
+        self.assertFalse(Configuracion.objects.exists())
+
+    def test_las_votaciones_nuevas_toman_los_valores_configurados(self):
+        Configuracion.objects.create(max_votos_por_defecto=2, periodicidad_por_defecto="diaria",
+                                     resultados_por_defecto="vivo")
+        crear_usuario("admin@prueba.co", admin=True)
+        self.entrar("admin@prueba.co")
+        self.client.post("/panel/votaciones/", {"titulo": "Mejor acordeonero", "categoria": self.categoria.pk})
+        v = Votacion.objects.get(titulo="Mejor acordeonero")
+        self.assertEqual((v.max_votos_por_votante, v.periodicidad_voto, v.resultados_visibles), (2, "diaria", "vivo"))
+
+    def test_el_bloqueo_de_inicio_de_sesion_usa_la_configuracion(self):
+        Configuracion.objects.create(max_intentos_login=2, minutos_bloqueo=7)
+        for _ in range(2):
+            self.client.post("/ingresar/", {"correo": "votante@prueba.co", "clave": "incorrecta"})
+        r = self.client.post("/ingresar/", {"correo": "votante@prueba.co", "clave": CLAVE})
+        self.assertContains(r, "Espera 7 minutos")

@@ -19,8 +19,8 @@ from catalog.models import Categoria, Edicion
 from catalog.utils import entero, mover_en_orden
 
 from . import services
-from .forms import OpcionForm, VotacionConfigForm, VotacionNuevaForm
-from .models import Opcion, Votacion, Voto
+from .forms import ConfiguracionForm, OpcionForm, VotacionConfigForm, VotacionNuevaForm
+from .models import Configuracion, Opcion, Votacion, Voto
 
 AVISO_VOTAR = "Inicia sesión o regístrate para votar. Al entrar volverás a la votación."
 
@@ -69,8 +69,9 @@ def detalle(request, pk):
     elif votacion.estado == Votacion.CERRADA:
         pista = "Esta votación ya cerró."
     elif limite:
-        pista = ("Ya usaste tu voto de hoy. Podrás volver a votar mañana*."
-                 if votacion.periodicidad_voto == Votacion.DIARIA else "Ya votaste en esta votación.")
+        pista = ("Ya usaste tu voto de hoy en esta categoría. Podrás volver a votar mañana*."
+                 if votacion.periodicidad_voto == Votacion.DIARIA
+                 else "Ya votaste en esta categoría. Puedes participar en las demás categorías.")
     else:
         pista = ""
     return render(request, "voting/p06_detalle.html", {
@@ -154,7 +155,29 @@ def comprobante(request, codigo):
 def ya_voto(request, pk):
     """P-09 · CU-04 7a: ya votó o alcanzó el límite; no se registra nada."""
     votacion = _votacion_publica(request, pk)
-    return render(request, "voting/p09_ya_voto.html", {"v": votacion})
+    return render(request, "voting/p09_ya_voto.html", {
+        "v": votacion, "voto_previo": services.voto_en_la_categoria(request.user, votacion),
+    })
+
+
+def mi_participacion(request):
+    """Mi participación · categorías de la edición vigente en las que el votante ya votó."""
+    if not request.user.is_authenticated:
+        return ir_a_login(request, "Inicia sesión para ver tu participación.", reverse("voting:mi_participacion"))
+    if request.user.es_administrador:
+        return redirect("results:panel")
+    services.sincronizar_estados(request)
+    edicion = Edicion.vigente()
+    votos = services.participacion(request.user, edicion)
+    categorias = []
+    if edicion:
+        for categoria in Categoria.objects.filter(edicion=edicion, estado=Categoria.ACTIVA):
+            categorias.append({"categoria": categoria, "votos": votos.get(categoria.pk, [])})
+    return render(request, "voting/p10_participacion.html", {
+        "edicion": edicion,
+        "categorias": categorias,
+        "votadas": sum(1 for c in categorias if c["votos"]),
+    })
 
 
 # ====================================================================== administración
@@ -173,6 +196,11 @@ def admin_votaciones(request):
         if form_nueva.is_valid():
             votacion = form_nueva.save(commit=False)
             votacion.descripcion = "Votación en preparación."
+            # Reglas iniciales tomadas de la configuración general (A-06).
+            config = Configuracion.actual()
+            votacion.max_votos_por_votante = config.max_votos_por_defecto
+            votacion.periodicidad_voto = config.periodicidad_por_defecto
+            votacion.resultados_visibles = config.resultados_por_defecto
             votacion.save()
             registrar(request, f"Votación «{votacion.titulo}» creada en borrador")
             messages.success(request, "Votación creada en borrador.")
@@ -374,3 +402,21 @@ def admin_opcion_mover(request, pk):
     if mover_en_orden(Opcion.objects.filter(votacion=opcion.votacion_id), opcion, request.POST.get("direccion")):
         registrar(request, f"Opción «{opcion.nombre}» reordenada")
     return redirect(_url_a04(opcion.votacion_id))
+
+
+# ====================================================================== configuración general
+@solo_administrador
+def admin_configuracion(request):
+    """A-06 · Configuración general: seguridad y reglas iniciales de las votaciones, sin tocar el código."""
+    actual = Configuracion.actual()
+    form = ConfiguracionForm(request.POST or None, instance=actual)
+    if request.method == "POST":
+        if form.is_valid():
+            form.save()
+            registrar(request, "Configuración general actualizada",
+                      detalle=(f"intentos {form.instance.max_intentos_login} · bloqueo {form.instance.minutos_bloqueo} min · "
+                               f"{form.instance.votos_por_minuto} votos/min · {form.instance.max_votos_por_defecto} voto(s) por categoría"))
+            messages.success(request, "Configuración guardada.")
+            return redirect("voting:admin_configuracion")
+        messages.error(request, primer_error(form))
+    return render(request, "voting/a06_configuracion.html", {"form": form, "guardada": actual.pk is not None})

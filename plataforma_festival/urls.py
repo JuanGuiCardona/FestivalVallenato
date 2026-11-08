@@ -8,6 +8,7 @@ admin.site.index_title = "Panel técnico de Django"
 
 urlpatterns = [
     path("admin/", admin.site.urls),          # panel técnico de Django
+    path("api/", include("api.urls")),        # API GET /api/categorias/ (JSON)
     path("", include("catalog.urls")),        # P-01, P-04, A-02
     path("", include("accounts.urls")),       # P-02, P-03
     path("", include("voting.urls")),         # P-05 a P-09, A-03, A-04

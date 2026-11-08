@@ -7,7 +7,7 @@
   <p class="sub" style="font-size:14px">{% if edicion %}Edición {{ edicion.anio }}{% else %}Sin edición vigente{% endif %}</p>
   <div class="list" id="cat-list">
     {% for c in categorias %}
-      <a class="card" href="{% url 'voting:por_categoria' c.pk %}"><span class="t">{{ c.nombre }}</span><small>{{ c.disponibles }} {% if c.disponibles == 1 %}votación disponible{% else %}votaciones disponibles{% endif %}</small></a>
+      <a class="card" href="{% url 'voting:por_categoria' c.pk %}"><span class="t">{{ c.nombre }}</span><small>{{ c.disponibles }} {% if c.disponibles == 1 %}votación disponible{% else %}votaciones disponibles{% endif %}</small>{% if c.pk in votadas %}<small>Ya votaste en esta categoría</small>{% endif %}</a>
     {% empty %}
       <p class="note">Aún no hay categorías publicadas.</p>
     {% endfor %}

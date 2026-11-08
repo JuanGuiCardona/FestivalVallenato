@@ -3,7 +3,7 @@ from django import forms
 
 from catalog.models import Categoria
 
-from .models import Opcion, Votacion
+from .models import Configuracion, Opcion, Votacion
 
 FORMATO_FECHA_HORA = "%Y-%m-%dT%H:%M"
 
@@ -71,3 +71,34 @@ class OpcionForm(forms.ModelForm):
         if repetida.exists():
             raise forms.ValidationError("Ya existe una opción con ese nombre en esta votación.")
         return nombre
+
+
+class ConfiguracionForm(forms.ModelForm):
+    """A-06 Configuración general (se guarda en la tabla configuracion, no en el código)."""
+    LIMITES = {
+        "max_intentos_login": (1, 20),
+        "minutos_bloqueo": (1, 1440),
+        "votos_por_minuto": (1, 1000),
+        "max_votos_por_defecto": (1, 50),
+    }
+
+    class Meta:
+        model = Configuracion
+        fields = ["max_intentos_login", "minutos_bloqueo", "votos_por_minuto",
+                  "max_votos_por_defecto", "periodicidad_por_defecto", "resultados_por_defecto"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for nombre, (minimo, maximo) in self.LIMITES.items():
+            campo = self.fields[nombre]
+            campo.widget.attrs.update({"min": minimo, "max": maximo})
+            campo.error_messages["required"] = "Completa todos los valores."
+
+    def clean(self):
+        datos = super().clean()
+        for nombre, (minimo, maximo) in self.LIMITES.items():
+            valor = datos.get(nombre)
+            if valor is not None and not (minimo <= valor <= maximo):
+                etiqueta = self.fields[nombre].label
+                self.add_error(nombre, f"«{etiqueta.capitalize()}» debe estar entre {minimo} y {maximo}.")
+        return datos
