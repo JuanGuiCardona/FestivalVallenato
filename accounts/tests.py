@@ -118,3 +118,39 @@ class CU02InicioSesionTests(TestCase):
         c = Client(enforce_csrf_checks=True)
         r = c.post("/ingresar/", {"correo": "votante@prueba.co", "clave": CLAVE})
         self.assertEqual(r.status_code, 403)
+
+
+class SeguridadServidorTests(TestCase):
+    """Retroalimentación (publicación en servidor): la IP no se puede falsificar con X-Forwarded-For."""
+
+    def setUp(self):
+        cache.clear()
+        crear_usuario()
+
+    def intentar(self, ip_falsa):
+        return self.client.post("/ingresar/", {"correo": "votante@prueba.co", "clave": "incorrecta"},
+                                HTTP_X_FORWARDED_FOR=ip_falsa)
+
+    @override_settings(LOGIN_MAX_INTENTOS=3)
+    def test_cambiar_x_forwarded_for_no_salta_el_bloqueo(self):
+        for i in range(3):
+            self.intentar(f"10.0.0.{i}")
+        r = self.client.post("/ingresar/", {"correo": "votante@prueba.co", "clave": CLAVE},
+                             HTTP_X_FORWARDED_FOR="10.9.9.9")
+        self.assertContains(r, "Espera")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    @override_settings(DETRAS_DE_PROXY=True)
+    def test_detras_de_proxy_usa_la_ip_que_agrega_el_proxy(self):
+        from django.test import RequestFactory
+
+        from audit.services import ip_cliente
+        request = RequestFactory().get("/", HTTP_X_FORWARDED_FOR="1.2.3.4, 200.10.10.10", REMOTE_ADDR="127.0.0.1")
+        self.assertEqual(ip_cliente(request), "200.10.10.10")
+
+    def test_sin_proxy_se_ignora_x_forwarded_for(self):
+        from django.test import RequestFactory
+
+        from audit.services import ip_cliente
+        request = RequestFactory().get("/", HTTP_X_FORWARDED_FOR="1.2.3.4", REMOTE_ADDR="190.0.0.1")
+        self.assertEqual(ip_cliente(request), "190.0.0.1")

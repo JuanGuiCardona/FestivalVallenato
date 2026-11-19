@@ -22,10 +22,32 @@ from catalog.utils import entero
 from voting.models import Votacion, Voto
 from voting.services import sincronizar_estados, votaciones_publicas
 
+from .excel import libro_de_resultados
 from .services import calcular
+
+TIPO_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 # ====================================================================== públicas
+def _votacion_con_resultados_visibles(request, pk):
+    """Devuelve (votación, None) si el usuario puede ver sus resultados; si no, (None, redirección)."""
+    v = get_object_or_404(Votacion.objects.select_related("categoria__edicion"), pk=pk)
+    es_admin = request.user.is_authenticated and request.user.es_administrador
+    publica = v.categoria.activa and v.categoria.edicion.estado == Edicion.ACTIVA
+    if not es_admin and not (publica and v.resultados_publicos):
+        # CU-05 2a: resultados no habilitados.
+        messages.warning(request, "Los resultados aún no están disponibles.")
+        destino = redirect("voting:detalle", pk) if publica and v.estado != Votacion.BORRADOR else redirect("catalog:inicio")
+        return None, destino
+    return v, None
+
+
+def _respuesta_excel(contenido, nombre):
+    respuesta = HttpResponse(contenido, content_type=TIPO_XLSX)
+    respuesta["Content-Disposition"] = f'attachment; filename="{nombre}"'
+    return respuesta
+
+
 def publicos(request):
     """P-05 en modo «Resultados» (barra inferior): votaciones con resultados publicados."""
     sincronizar_estados(request)
@@ -45,15 +67,25 @@ def publicos(request):
 def votacion(request, pk):
     """P-09 en modo resultados · CU-05 · RF-10 · RN-11."""
     sincronizar_estados(request)
-    v = get_object_or_404(Votacion.objects.select_related("categoria__edicion"), pk=pk)
-    es_admin = request.user.is_authenticated and request.user.es_administrador
-    publica = v.categoria.activa and v.categoria.edicion.estado == Edicion.ACTIVA
-    if not es_admin and not (publica and v.resultados_publicos):
-        # CU-05 2a: resultados no habilitados.
-        messages.warning(request, "Los resultados aún no están disponibles.")
-        return redirect("voting:detalle", pk) if publica and v.estado != Votacion.BORRADOR else redirect("catalog:inicio")
+    v, rechazo = _votacion_con_resultados_visibles(request, pk)
+    if rechazo:
+        return rechazo
     filas, total = calcular(v)
     return render(request, "results/p09_resultados.html", {"v": v, "filas": filas, "total": total, "corte": timezone.now()})
+
+
+def descargar_votacion(request, pk):
+    """Botón «Descargar resultados (Excel)» de una votación (P-09 y A-05).
+
+    El público solo puede descargar lo que ya puede ver (RN-11); el administrador, cualquier votación.
+    """
+    sincronizar_estados(request)
+    v, rechazo = _votacion_con_resultados_visibles(request, pk)
+    if rechazo:
+        return rechazo
+    contenido = libro_de_resultados([v], titulo=f"Resultados · {v.titulo}")
+    registrar(request, f"Descarga de resultados en Excel de «{v.titulo}»")
+    return _respuesta_excel(contenido, f"resultados_votacion_{v.pk}.xlsx")
 
 
 # ====================================================================== administración
@@ -133,3 +165,20 @@ def exportar(request, pk):
     w.writerow(["Total", "", total, ""])
     registrar(request, f"Exportación de resultados de «{v.titulo}»")
     return respuesta
+
+
+@solo_administrador
+def descargar_todos(request):
+    """A-01 / A-05 · Botón «Descargar todos los resultados (Excel)»: todas las votaciones de una edición."""
+    sincronizar_estados(request)
+    ediciones = Edicion.objects.all()
+    edicion = ediciones.filter(pk=entero(request.GET.get("edicion")) or 0).first() or Edicion.vigente()
+    votaciones = (Votacion.objects.select_related("categoria__edicion")
+                  .order_by("categoria__edicion__anio", "categoria__orden", "categoria__nombre", "pk"))
+    if edicion:
+        votaciones = votaciones.filter(categoria__edicion=edicion)
+    titulo = f"Resultados de la edición {edicion.anio}" if edicion else "Resultados de todas las ediciones"
+    contenido = libro_de_resultados(list(votaciones), titulo=titulo)
+    registrar(request, "Descarga de todos los resultados en Excel", detalle=titulo)
+    nombre = f"resultados_festival_{edicion.anio}.xlsx" if edicion else "resultados_festival.xlsx"
+    return _respuesta_excel(contenido, nombre)

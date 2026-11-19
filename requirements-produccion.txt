@@ -1,0 +1,5 @@
+# Dependencias para publicar el sistema en un servidor (además de requirements.txt).
+-r requirements.txt
+gunicorn>=23.0 ; sys_platform != "win32"   # servidor de aplicaciones en Linux
+waitress>=3.0 ; sys_platform == "win32"    # servidor de aplicaciones en Windows
+whitenoise>=6.7                            # entrega los archivos estáticos (CSS, imágenes)

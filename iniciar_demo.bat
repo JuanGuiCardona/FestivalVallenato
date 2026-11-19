@@ -23,8 +23,8 @@ if not exist ".venv\Scripts\python.exe" (
 )
 call ".venv\Scripts\activate.bat"
 
-echo  [2/4] Instalando Django ...
-python -m pip install --quiet --disable-pip-version-check "Django>=5.2,<6.2" "python-dotenv>=1.0" || goto error
+echo  [2/4] Instalando Django y openpyxl ...
+python -m pip install --quiet --disable-pip-version-check "Django>=5.2,<6.2" "python-dotenv>=1.0" "openpyxl>=3.1" || goto error
 
 if exist ".env" goto paso3
 echo  Creando archivo .env de demostracion ...

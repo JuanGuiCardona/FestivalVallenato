@@ -18,9 +18,8 @@ class Votacion(models.Model):
     BORRADOR, PROXIMA, ABIERTA, CERRADA = "borrador", "proxima", "abierta", "cerrada"
     ESTADOS = [(BORRADOR, "Borrador"), (PROXIMA, "Próximamente"), (ABIERTA, "Abierta"), (CERRADA, "Cerrada")]
 
-    # RN-06 (pendiente de validación*): frecuencia del voto.
-    UNICA, DIARIA = "unica", "diaria"
-    PERIODICIDADES = [(UNICA, "Una única vez durante la votación"), (DIARIA, "Cada día (se reinicia a medianoche)")]
+    # RN-06: la regla del voto es fija (un voto por usuario, categoría y edición) y no se configura.
+    TEXTO_REGLA = "1 voto por persona en la categoría"
 
     # RN-11 (pendiente de validación*): visibilidad de resultados.
     RES_VIVO, RES_CIERRE, RES_ADMIN = "vivo", "cierre", "admin"
@@ -38,8 +37,6 @@ class Votacion(models.Model):
     fecha_apertura = models.DateTimeField("fecha de apertura", null=True, blank=True)
     fecha_cierre = models.DateTimeField("fecha de cierre", null=True, blank=True)
     estado = models.CharField(max_length=10, choices=ESTADOS, default=BORRADOR)
-    max_votos_por_votante = models.PositiveSmallIntegerField("máximo de votos por votante", default=1)
-    periodicidad_voto = models.CharField("periodicidad del voto", max_length=10, choices=PERIODICIDADES, default=UNICA)
     resultados_visibles = models.CharField("resultados visibles", max_length=10, choices=VISIBILIDADES, default=RES_CIERRE)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
 
@@ -58,8 +55,6 @@ class Votacion(models.Model):
         # CU-07 4a: el cierre no puede ser anterior a la apertura.
         if self.fecha_apertura and self.fecha_cierre and self.fecha_cierre <= self.fecha_apertura:
             raise ValidationError({"fecha_cierre": "La fecha de cierre debe ser posterior a la de apertura."})
-        if self.max_votos_por_votante < 1:
-            raise ValidationError({"max_votos_por_votante": "Debe permitir al menos 1 voto."})
 
     # ---------------------------------------------------------- estado
     def opciones_activas(self):
@@ -108,17 +103,9 @@ class Votacion(models.Model):
         return self.votos.exists()
 
     # ---------------------------------------------------------- reglas del voto
-    def periodo_actual(self):
-        """Periodo usado en la restricción única del voto (11.2)."""
-        if self.periodicidad_voto == self.DIARIA:
-            return timezone.localdate().isoformat()
-        return "UNICA"
-
     def texto_limite(self):
-        n = self.max_votos_por_votante
-        votos = "1 voto" if n == 1 else f"{n} votos"
-        cuando = "por día" if self.periodicidad_voto == self.DIARIA else "por persona"
-        return f"{votos} {cuando} en la categoría"
+        """Regla fija del enunciado; se muestra igual en todas las votaciones."""
+        return self.TEXTO_REGLA
 
 
 class Opcion(models.Model):
@@ -172,10 +159,6 @@ class Voto(models.Model):
                                 related_name="votos", editable=False)
     fecha_hora = models.DateTimeField(default=timezone.now)
     estado = models.CharField(max_length=10, choices=ESTADOS, default=REGISTRADO)
-    # Apoyo a la regla de unicidad (11.2): periodo = "UNICA" o la fecha del día;
-    # numero = 1..máximo de votos por votante en la categoría y ese periodo.
-    periodo = models.CharField(max_length=10)
-    numero = models.PositiveSmallIntegerField(default=1)
     codigo = models.CharField("código de comprobante", max_length=20, unique=True, default=nuevo_codigo)
 
     class Meta:
@@ -185,9 +168,10 @@ class Voto(models.Model):
         verbose_name_plural = "votos"
         constraints = [
             # Un voto por usuario, categoría y edición (RN-06, RNF-05 / R-07). MySQL impide
-            # el duplicado aunque las solicitudes lleguen al mismo tiempo o desde dos sesiones.
-            models.UniqueConstraint(fields=["usuario", "edicion", "categoria", "periodo", "numero"],
-                                    name="voto_unico_categoria_edicion"),
+            # el duplicado aunque las solicitudes lleguen al mismo tiempo, desde varias sesiones
+            # o con varios usuarios votando a la vez. La regla es fija: no se configura.
+            models.UniqueConstraint(fields=["usuario", "edicion", "categoria"],
+                                    name="voto_unico_usuario_categoria_edicion"),
         ]
         indexes = [models.Index(fields=["votacion", "opcion"], name="voto_conteo_idx")]
 
@@ -208,18 +192,15 @@ class Configuracion(models.Model):
     """A-06 Configuración general: valores que el administrador cambia desde la interfaz.
 
     Hay una sola fila. Mientras no se guarde, se usan los valores del archivo .env
-    (LOGIN_MAX_INTENTOS, LOGIN_BLOQUEO_SEGUNDOS, VOTOS_MAX_POR_MINUTO) y los valores
-    por defecto de la votación.
+    (LOGIN_MAX_INTENTOS, LOGIN_BLOQUEO_SEGUNDOS, VOTOS_MAX_POR_MINUTO).
+    La regla del voto (uno por usuario, categoría y edición) no se configura aquí: es fija.
     """
     id_configuracion = models.AutoField(primary_key=True)
     # Seguridad (RNF-04, preliminar*)
     max_intentos_login = models.PositiveSmallIntegerField("intentos de inicio de sesión antes del bloqueo", default=5)
     minutos_bloqueo = models.PositiveSmallIntegerField("minutos de bloqueo temporal", default=5)
     votos_por_minuto = models.PositiveSmallIntegerField("solicitudes de voto por minuto por persona", default=10)
-    # Valores con los que se crean las votaciones nuevas (RN-06, RN-11, preliminares*)
-    max_votos_por_defecto = models.PositiveSmallIntegerField("votos por persona en cada categoría", default=1)
-    periodicidad_por_defecto = models.CharField("periodicidad del voto", max_length=10,
-                                                choices=Votacion.PERIODICIDADES, default=Votacion.UNICA)
+    # Valor con el que se crean las votaciones nuevas (RN-11, preliminar*)
     resultados_por_defecto = models.CharField("resultados visibles", max_length=10,
                                               choices=Votacion.VISIBILIDADES, default=Votacion.RES_CIERRE)
     fecha_actualizacion = models.DateTimeField("última actualización", auto_now=True)

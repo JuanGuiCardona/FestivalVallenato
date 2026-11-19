@@ -16,7 +16,7 @@ class OpcionInline(admin.TabularInline):
 @admin.register(Votacion)
 class VotacionAdmin(admin.ModelAdmin):
     list_display = ("titulo", "categoria", "estado", "fecha_apertura", "fecha_cierre",
-                    "max_votos_por_votante", "periodicidad_voto", "resultados_visibles", "total_votos")
+                    "resultados_visibles", "total_votos")
     list_filter = ("estado", "categoria__edicion", "categoria", "resultados_visibles")
     search_fields = ("titulo",)
     inlines = [OpcionInline]

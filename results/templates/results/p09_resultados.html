@@ -10,6 +10,7 @@
   <p class="sub">Con corte a {{ corte|date:"j M Y, g:i A" }}{% if v.estado == "abierta" %} · resultados en vivo{% endif %}</p>
   {% include "includes/barras.html" %}
   <p class="note" style="margin:0 0 14px"><b>Total de votos: {{ total|intcomma }}</b></p>
-  <a class="btn primary" href="{% url 'results:publicos' %}">Ver otras votaciones</a>
+  <a class="btn primary" href="{% url 'results:descargar_votacion' v.pk %}" download>Descargar resultados (Excel)</a>
+  <a class="btn secondary" href="{% url 'results:publicos' %}">Ver otras votaciones</a>
   <a class="btn secondary" href="{% url 'catalog:inicio' %}">Ir al inicio</a>
 {% endblock %}

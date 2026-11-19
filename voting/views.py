@@ -69,9 +69,7 @@ def detalle(request, pk):
     elif votacion.estado == Votacion.CERRADA:
         pista = "Esta votación ya cerró."
     elif limite:
-        pista = ("Ya usaste tu voto de hoy en esta categoría. Podrás volver a votar mañana*."
-                 if votacion.periodicidad_voto == Votacion.DIARIA
-                 else "Ya votaste en esta categoría. Puedes participar en las demás categorías.")
+        pista = "Ya votaste en esta categoría. Puedes participar en las demás categorías."
     else:
         pista = ""
     return render(request, "voting/p06_detalle.html", {
@@ -196,10 +194,8 @@ def admin_votaciones(request):
         if form_nueva.is_valid():
             votacion = form_nueva.save(commit=False)
             votacion.descripcion = "Votación en preparación."
-            # Reglas iniciales tomadas de la configuración general (A-06).
+            # Visibilidad inicial de resultados tomada de la configuración general (A-06).
             config = Configuracion.actual()
-            votacion.max_votos_por_votante = config.max_votos_por_defecto
-            votacion.periodicidad_voto = config.periodicidad_por_defecto
             votacion.resultados_visibles = config.resultados_por_defecto
             votacion.save()
             registrar(request, f"Votación «{votacion.titulo}» creada en borrador")
@@ -415,7 +411,7 @@ def admin_configuracion(request):
             form.save()
             registrar(request, "Configuración general actualizada",
                       detalle=(f"intentos {form.instance.max_intentos_login} · bloqueo {form.instance.minutos_bloqueo} min · "
-                               f"{form.instance.votos_por_minuto} votos/min · {form.instance.max_votos_por_defecto} voto(s) por categoría"))
+                               f"{form.instance.votos_por_minuto} votos/min"))
             messages.success(request, "Configuración guardada.")
             return redirect("voting:admin_configuracion")
         messages.error(request, primer_error(form))

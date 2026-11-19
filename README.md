@@ -5,7 +5,7 @@ Plataforma funcional de votaciones para el Festival de la Leyenda Vallenata 2027
 **Equipo:** Juan Guillermo Cardona Cifuentes · Didier Yovani Combita Pérez · Javier Alexander Puentes Bejarano
 
 - **Tecnologías:** Python 3.11 o superior, Django 6.1 (patrón MVT; compatible con 5.2), MySQL 8.4, HTML5, CSS3 y JavaScript.
-- **Dependencias** (`requirements.txt`): `Django>=5.2,<6.2`, `mysqlclient>=2.2` y `python-dotenv>=1.0`.
+- **Dependencias** (`requirements.txt`): `Django>=5.2,<6.2`, `mysqlclient>=2.2`, `python-dotenv>=1.0` y `openpyxl>=3.1` (descarga de resultados en Excel).
 - **Organización:** 6 apps Django: `accounts`, `catalog`, `voting`, `results` y `audit` (sección 15.4 del documento) y `api` (API GET en JSON).
 - **Interfaz:** las pantallas del prototipo navegable (P-01 a P-09 y A-01 a A-05), más *Mi participación* (P-10) y *Configuración general* (A-06).
 - **Trazabilidad requerimiento → código → prueba:** ver [`TRAZABILIDAD.md`](TRAZABILIDAD.md).
@@ -15,10 +15,13 @@ Plataforma funcional de votaciones para el Festival de la Leyenda Vallenata 2027
 | Qué | Archivo |
 |---|---|
 | **API** `GET /api/categorias/` | `api/views.py` (rutas en `api/urls.py`) |
-| **Unicidad del voto** (un voto por usuario, categoría y edición) | Restricción `voto_unico_categoria_edicion` en `voting/models.py` (clase `Voto`) y validación en `voting/services.py → emitir_voto` |
-| Migración que crea esa restricción en MySQL | `voting/migrations/0002_voto_unico_por_categoria.py` |
+| **Unicidad del voto** (un voto por usuario, categoría y edición; regla fija) | Restricción `voto_unico_usuario_categoria_edicion` en `voting/models.py` (clase `Voto`) y validación en `voting/services.py → emitir_voto` |
+| Migraciones que crean esa restricción en MySQL | `voting/migrations/0002_voto_unico_por_categoria.py` y `0004_regla_fija_un_voto_por_categoria.py` |
+| Prueba de concurrencia directa en MySQL | `python manage.py simular_votacion` (`voting/management/commands/simular_votacion.py`) |
+| Publicación en un servidor | [`DESPLIEGUE.md`](DESPLIEGUE.md) y `requirements-produccion.txt` |
 | Categorías votadas por el usuario | `voting/views.py → mi_participacion` (pantalla P-10, `/mi-participacion/`) |
 | Configuración desde la interfaz | `voting/views.py → admin_configuracion` (pantalla A-06, `/panel/configuracion/`) |
+| Descarga de resultados en Excel | `results/excel.py` (arma el archivo) y `results/views.py → descargar_todos`, `descargar_votacion` |
 
 ---
 
@@ -44,7 +47,7 @@ Con la cuenta de administrador, el sistema lleva directamente al **Panel (A-01)*
 python -m venv .venv
 # Windows:      .venv\Scripts\activate
 # macOS/Linux:  source .venv/bin/activate
-pip install "Django>=5.2,<6.2" python-dotenv
+pip install "Django>=5.2,<6.2" python-dotenv openpyxl
 ```
 
 Cree un archivo `.env` al lado de `manage.py` con este contenido:
@@ -116,8 +119,9 @@ Es de solo lectura (solo acepta GET) y no entrega votos ni datos personales. Eje
 Con la cuenta de administrador, desde el **Panel (A-01)**:
 
 - **Ediciones y categorías (A-02):** crear, editar, ordenar, activar o desactivar ediciones y categorías.
-- **Votaciones (A-03):** crear votaciones, configurar fechas, límite de votos, periodicidad y visibilidad de resultados; abrir y cerrar.
+- **Votaciones (A-03):** crear votaciones, configurar fechas y visibilidad de resultados; abrir y cerrar. La regla del voto es fija: un voto por usuario en cada categoría de la edición.
 - **Opciones (A-04):** crear, editar, ordenar y desactivar opciones.
+- **Resultados (A-05):** ver resultados y auditoría, y descargar los resultados en Excel: de una votación o de toda la edición.
 - **Configuración general (A-06):** intentos de inicio de sesión, minutos de bloqueo, solicitudes de voto por minuto y reglas iniciales de las votaciones nuevas. Se guarda en la tabla `configuracion` de MySQL.
 
 ---
@@ -128,7 +132,15 @@ Con la cuenta de administrador, desde el **Panel (A-01)**:
 python manage.py test
 ```
 
-Son 81 pruebas organizadas por caso de uso (CU-01 a CU-09), más las de la API, la regla de un voto por categoría, *Mi participación* y la configuración general. Las 2 pruebas de **votos simultáneos** solo se ejecutan con MySQL; en SQLite se omiten.
+Son 91 pruebas organizadas por caso de uso (CU-01 a CU-09), más las de la API, la descarga en Excel, la regla de un voto por categoría, *Mi participación*, la configuración general y la seguridad en servidor. Las 3 pruebas de **votos simultáneos** (entre ellas, 20 votantes distintos con 3 intentos a la vez) solo se ejecutan con MySQL; en SQLite se omiten.
+
+Prueba de concurrencia directa sobre la base MySQL configurada (crea votantes temporales, verifica y los borra):
+
+```bash
+python manage.py simular_votacion --usuarios 30 --intentos 4
+```
+
+Cada solicitud simultánea abre su propia conexión, así que el total (usuarios × intentos) debe ser menor que `max_connections` de MySQL (151 por defecto). Si se pasa, el comando lo avisa antes de empezar.
 
 ## Recorrido sugerido
 

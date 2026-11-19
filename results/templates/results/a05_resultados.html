@@ -18,8 +18,10 @@
     <p class="sub">Con corte a {{ corte|date:"j M Y, g:i A" }} · Resultados públicos: {{ v.get_resultados_visibles_display|lower }}*</p>
     {% include "includes/barras.html" %}
     <h3 id="a-total">Total de votos: {{ total|intcomma }}</h3>
+    <a class="btn primary" href="{% url 'results:descargar_votacion' v.pk %}" download>Descargar esta votación (Excel)</a>
     <a class="btn secondary" href="{% url 'results:exportar' v.pk %}">Exportar CSV*</a>
   {% endif %}
+  {% if votaciones %}<a class="btn secondary" href="{% url 'results:descargar_todos' %}" download>Descargar todos los resultados (Excel)</a>{% endif %}
   <a class="btn secondary" href="?{% if v %}votacion={{ v.pk }}{% endif %}{% if not ver_auditoria %}&auditoria=1{% endif %}" aria-expanded="{% if ver_auditoria %}true{% else %}false{% endif %}">{% if ver_auditoria %}Ocultar registro de auditoría{% else %}Ver registro de auditoría{% endif %}</a>
   {% if ver_auditoria %}
     <div id="audit-box">

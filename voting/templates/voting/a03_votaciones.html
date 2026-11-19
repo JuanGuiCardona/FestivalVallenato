@@ -43,10 +43,11 @@
             <input type="hidden" name="filtro_categoria" value="{{ filtro_cat }}"><input type="hidden" name="filtro_estado" value="{{ filtro_estado }}">
             <span class="t">Configurar votación</span>
             {% for f in form_config %}
-              <label for="{{ f.id_for_label }}">{{ f.label|capfirst }}{% if f.name == "max_votos_por_votante" or f.name == "periodicidad_voto" or f.name == "resultados_visibles" %}*{% endif %}</label>
+              <label for="{{ f.id_for_label }}">{{ f.label|capfirst }}{% if f.name == "resultados_visibles" %}*{% endif %}</label>
               {{ f }}
             {% endfor %}
-            {% if form_config.bloqueados %}<p class="note">Ya tiene votos: la categoría, la apertura, el límite y la periodicidad no se pueden cambiar (CU-07 2a)*.</p>{% endif %}
+            <p class="note"><b>Regla del voto:</b> 1 voto por persona en cada categoría de la edición (fija, no se configura).</p>
+            {% if form_config.bloqueados %}<p class="note">Ya tiene votos: la categoría y la apertura no se pueden cambiar (CU-07 2a)*.</p>{% endif %}
             <p class="note">* Reglas configurables pendientes de validación con el cliente (RN-06, RN-11).</p>
             <div class="acts"><button class="mini" type="submit">Guardar</button><a class="mini" href="?categoria={{ filtro_cat }}&estado={{ filtro_estado }}">Cancelar</a></div>
           </form>
@@ -55,7 +56,7 @@
           <small>{{ v.categoria.edicion.anio }} · {{ v.categoria.nombre }}</small>
           {% include "includes/chip.html" with estado=v.estado %}
           <small>{% if v.fecha_apertura %}Abre {{ v.fecha_apertura|date:"j M Y, g:i A" }} · {% endif %}{% if v.fecha_cierre %}Cierra {{ v.fecha_cierre|date:"j M Y, g:i A" }}{% else %}Cierre por definir*{% endif %}</small>
-          <small>{{ v.texto_limite }}* · Resultados: {{ v.get_resultados_visibles_display|lower }}* · {{ v.total_votos }} voto{{ v.total_votos|pluralize }}</small>
+          <small>{{ v.texto_limite }} · Resultados: {{ v.get_resultados_visibles_display|lower }}* · {{ v.total_votos }} voto{{ v.total_votos|pluralize }}</small>
           <div class="acts">
             <a class="mini" href="?categoria={{ filtro_cat }}&estado={{ filtro_estado }}&editar={{ v.pk }}">Configurar</a>
             {% if v.estado == "borrador" or v.estado == "proxima" %}

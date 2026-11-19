@@ -26,21 +26,22 @@ class VotacionNuevaForm(forms.ModelForm):
 
 
 class VotacionConfigForm(forms.ModelForm):
-    """Configurar título, categoría, fechas y reglas (RF-13 · RNF-16)."""
+    """Configurar título, categoría, fechas y visibilidad de resultados (RF-13 · RNF-16).
+
+    La regla del voto (uno por usuario, categoría y edición) es fija y no aparece en el formulario.
+    """
     categoria = CategoriaChoiceField(label="Categoría", queryset=Categoria.objects.select_related("edicion"))
 
     # Con votos registrados solo se permiten cambios no críticos (CU-07 2a, propuesta*).
-    CAMPOS_CRITICOS = ["categoria", "fecha_apertura", "max_votos_por_votante", "periodicidad_voto"]
+    CAMPOS_CRITICOS = ["categoria", "fecha_apertura"]
 
     class Meta:
         model = Votacion
-        fields = ["titulo", "categoria", "descripcion", "fecha_apertura", "fecha_cierre",
-                  "max_votos_por_votante", "periodicidad_voto", "resultados_visibles"]
+        fields = ["titulo", "categoria", "descripcion", "fecha_apertura", "fecha_cierre", "resultados_visibles"]
         widgets = {
             "descripcion": forms.Textarea(attrs={"rows": 3}),
             "fecha_apertura": forms.DateTimeInput(attrs={"type": "datetime-local"}, format=FORMATO_FECHA_HORA),
             "fecha_cierre": forms.DateTimeInput(attrs={"type": "datetime-local"}, format=FORMATO_FECHA_HORA),
-            "max_votos_por_votante": forms.NumberInput(attrs={"min": 1, "max": 50}),
         }
         error_messages = {"titulo": {"required": "Escribe el título de la votación."}}
 
@@ -79,13 +80,11 @@ class ConfiguracionForm(forms.ModelForm):
         "max_intentos_login": (1, 20),
         "minutos_bloqueo": (1, 1440),
         "votos_por_minuto": (1, 1000),
-        "max_votos_por_defecto": (1, 50),
     }
 
     class Meta:
         model = Configuracion
-        fields = ["max_intentos_login", "minutos_bloqueo", "votos_por_minuto",
-                  "max_votos_por_defecto", "periodicidad_por_defecto", "resultados_por_defecto"]
+        fields = ["max_intentos_login", "minutos_bloqueo", "votos_por_minuto", "resultados_por_defecto"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

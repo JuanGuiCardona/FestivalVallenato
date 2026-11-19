@@ -50,7 +50,7 @@ class CU04EmitirVotoTests(BaseVoto):
         voto = Voto.objects.get()
         self.assertRedirects(r, f"/comprobante/{voto.codigo}/")
         self.assertContains(self.client.get(r.url), voto.codigo)                           # paso 9 (RF-09)
-        self.assertEqual((voto.usuario, voto.opcion, voto.periodo), (self.votante, self.opcion, "UNICA"))
+        self.assertEqual((voto.usuario, voto.opcion, voto.categoria), (self.votante, self.opcion, self.categoria))
         registro = RegistroAuditoria.objects.get(accion="Voto registrado")               # RN-13
         self.assertNotIn("Opción A", registro.detalle)                                    # secreto del voto
 
@@ -96,9 +96,9 @@ class CU04EmitirVotoTests(BaseVoto):
         self.assertContains(self.client.get(f"/votaciones/{self.votacion.pk}/ya-votaste/"), "No se registró un voto nuevo.")
 
     def test_7b_la_base_de_datos_rechaza_duplicados(self):
-        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion, periodo="UNICA", numero=1)
+        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion)
         with self.assertRaises(IntegrityError), transaction.atomic():
-            Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion, periodo="UNICA", numero=1)
+            Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion)
 
     def test_rn04_la_votacion_se_cierra_sola_al_pasar_la_fecha(self):
         Votacion.objects.filter(pk=self.votacion.pk).update(fecha_cierre=timezone.now() - timedelta(seconds=1))
@@ -109,31 +109,33 @@ class CU04EmitirVotoTests(BaseVoto):
         self.assertFalse(Voto.objects.exists())
         self.assertTrue(RegistroAuditoria.objects.filter(accion__startswith="Cierre programado", usuario=None).exists())
 
-    def test_rn06_periodicidad_diaria(self):
-        self.votacion.periodicidad_voto = Votacion.DIARIA
-        self.votacion.save()
+    def test_rn06_la_regla_se_mantiene_al_dia_siguiente(self):
+        """La regla es fija: cambiar de día no habilita un segundo voto en la categoría."""
         self.entrar()
         with mock.patch("django.utils.timezone.localdate", return_value=date(2027, 4, 28)):
             self.votar()
-            self.votar()
-            self.assertEqual(Voto.objects.count(), 1)
         with mock.patch("django.utils.timezone.localdate", return_value=date(2027, 4, 29)):
             self.votar()
-        self.assertEqual(list(Voto.objects.order_by("periodo").values_list("periodo", flat=True)), ["2027-04-28", "2027-04-29"])
+        self.assertEqual(Voto.objects.count(), 1)
 
-    def test_rn06_maximo_de_votos_por_votante(self):
-        self.votacion.max_votos_por_votante = 2
-        self.votacion.save()
+    def test_rn06_varios_intentos_dejan_un_solo_voto(self):
         self.entrar()
         for _ in range(3):
             self.votar()
-        self.assertEqual(Voto.objects.count(), 2)
-        self.assertEqual(sorted(Voto.objects.values_list("numero", flat=True)), [1, 2])
+        self.assertEqual(Voto.objects.count(), 1)
+
+    def test_rn06_la_regla_no_aparece_como_configurable(self):
+        """Ni la votación (A-03) ni la configuración general (A-06) permiten cambiar el límite."""
+        from .forms import ConfiguracionForm, VotacionConfigForm
+        self.assertNotIn("max_votos_por_votante", VotacionConfigForm().fields)
+        self.assertNotIn("periodicidad_voto", VotacionConfigForm().fields)
+        self.assertFalse({"max_votos_por_defecto", "periodicidad_por_defecto"} & set(ConfiguracionForm().fields))
+        self.assertEqual(self.votacion.texto_limite(), "1 voto por persona en la categoría")
 
     def test_11_2_la_opcion_debe_ser_de_la_misma_votacion(self):
         otra = crear_votacion(self.categoria, titulo="Otra")
         with self.assertRaises(ValidationError):
-            Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=otra.opciones.first(), periodo="UNICA")
+            Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=otra.opciones.first())
         request = RequestFactory().post("/")
         request.user = self.votante
         with self.assertRaises(services.ReglaVoto):
@@ -156,10 +158,9 @@ class CU04EmitirVotoTests(BaseVoto):
     def test_rnf04_limite_de_solicitudes(self):
         request = RequestFactory().post("/")
         request.user = self.votante
-        self.votacion.max_votos_por_votante = 10
-        self.votacion.save()
         services.emitir_voto(request, self.votacion.pk, self.opcion.pk)
-        services.emitir_voto(request, self.votacion.pk, self.opcion.pk)
+        with self.assertRaises(services.ReglaVoto):
+            services.emitir_voto(request, self.votacion.pk, self.opcion.pk)  # ya votó
         with self.assertRaises(services.ReglaVoto) as e:
             services.emitir_voto(request, self.votacion.pk, self.opcion.pk)
         self.assertEqual(e.exception.codigo, "frecuencia")
@@ -206,6 +207,23 @@ class CU04ConcurrenciaTests(TransactionTestCase):
             h.join()
         self.assertEqual(resultados.count("ok"), 1, resultados)
         self.assertEqual(Voto.objects.filter(usuario=votante).count(), 1)
+
+    @override_settings(VOTOS_MAX_POR_MINUTO=1000)
+    def test_muchos_usuarios_votan_a_la_vez(self):
+        """Retroalimentación: 20 votantes distintos con 3 intentos simultáneos cada uno (60 solicitudes)."""
+        from .simulacion import simular
+        cache.clear()
+        _, categoria, votacion = crear_base()
+        otra = crear_votacion(categoria, titulo="Mejor presentación en tarima")
+        usuarios = [crear_usuario(f"multi{i}@prueba.co") for i in range(20)]
+        r = simular(usuarios, [votacion, otra], intentos_por_usuario=3)
+        self.assertEqual(r["errores"], [])
+        self.assertEqual(r["resultados"].get("registrado"), 20, r)
+        self.assertEqual(r["resultados"].get("rechazado: ya_voto"), 40, r)
+        self.assertEqual((r["votos_guardados"], r["usuarios_con_mas_de_un_voto"], r["usuarios_sin_voto"]), (20, 0, 0))
+        # Los conteos de resultados coinciden con los votos guardados.
+        from results.services import calcular
+        self.assertEqual(calcular(votacion)[1] + calcular(otra)[1], 20)
 
     @override_settings(VOTOS_MAX_POR_MINUTO=1000)
     def test_votos_simultaneos_en_votaciones_de_la_misma_categoria(self):
@@ -264,23 +282,22 @@ class CU07GestionVotacionesTests(BaseVoto):
 
     def test_4a_cierre_anterior_a_la_apertura(self):
         datos = {"titulo": "X", "categoria": self.categoria.pk, "descripcion": "", "fecha_apertura": "2027-05-01T10:00",
-                 "fecha_cierre": "2027-04-01T10:00", "max_votos_por_votante": 1, "periodicidad_voto": "unica",
-                 "resultados_visibles": "cierre"}
+                 "fecha_cierre": "2027-04-01T10:00", "resultados_visibles": "cierre"}
         v = crear_votacion(self.categoria, titulo="Fechas", estado=Votacion.BORRADOR)
         r = self.client.post(f"/panel/votaciones/{v.pk}/configurar/", datos, follow=True)
         self.assertContains(r, "La fecha de cierre debe ser posterior a la de apertura.")
 
     def test_2a_con_votos_no_cambian_las_reglas_criticas(self):
-        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion, periodo="UNICA")
-        datos = {"titulo": "Nuevo título", "categoria": self.categoria.pk, "descripcion": "d",
-                 "fecha_cierre": "2027-05-01T20:00", "max_votos_por_votante": 9, "periodicidad_voto": "diaria",
+        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion)
+        otra_categoria = Categoria.objects.create(edicion=self.categoria.edicion, nombre="Piquería", orden=1)
+        datos = {"titulo": "Nuevo título", "categoria": otra_categoria.pk, "descripcion": "d",
+                 "fecha_apertura": "2027-01-01T10:00", "fecha_cierre": "2027-05-01T20:00",
                  "resultados_visibles": "vivo"}
         self.client.post(f"/panel/votaciones/{self.votacion.pk}/configurar/", datos)
         self.votacion.refresh_from_db()
         self.assertEqual(self.votacion.titulo, "Nuevo título")              # no crítico: cambia
         self.assertEqual(self.votacion.resultados_visibles, "vivo")
-        self.assertEqual(self.votacion.max_votos_por_votante, 1)            # crítico: se mantiene
-        self.assertEqual(self.votacion.periodicidad_voto, Votacion.UNICA)
+        self.assertEqual(self.votacion.categoria, self.categoria)           # crítico: se mantiene
 
     def test_programar_y_apertura_automatica(self):
         v = crear_votacion(self.categoria, titulo="Programada", estado=Votacion.BORRADOR,
@@ -321,7 +338,7 @@ class CU08GestionOpcionesTests(BaseVoto):
         self.assertContains(r, "Ya existe una opción con ese nombre en esta votación.")
 
     def test_rn10_con_votos_se_desactiva_sin_votos_se_elimina(self):
-        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion, periodo="UNICA")
+        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion)
         r = self.client.post(f"/panel/opciones/{self.opcion.pk}/estado/", follow=True)
         self.assertContains(r, "se desactivó en lugar de eliminarse (RN-10)")
         self.opcion.refresh_from_db()
@@ -383,10 +400,9 @@ class UnicidadPorCategoriaTests(BaseVoto):
         self.assertEqual(Voto.objects.filter(usuario=self.votante).count(), 1)
 
     def test_mysql_rechaza_el_duplicado_por_categoria_y_edicion(self):
-        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion, periodo="UNICA", numero=1)
+        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.opcion)
         with self.assertRaises(IntegrityError), transaction.atomic():
-            Voto.objects.create(usuario=self.votante, votacion=self.misma_cat, opcion=self.misma_cat.opciones.first(),
-                                periodo="UNICA", numero=1)
+            Voto.objects.create(usuario=self.votante, votacion=self.misma_cat, opcion=self.misma_cat.opciones.first())
 
     def test_el_voto_guarda_la_categoria_y_la_edicion_de_su_votacion(self):
         self.votar(self.otra_cat, self.otra_cat.opciones.first())
@@ -431,7 +447,7 @@ class ConfiguracionGeneralTests(BaseVoto):
     """A-06: la configuración básica se cambia desde la interfaz y queda en MySQL."""
 
     DATOS = {"max_intentos_login": 3, "minutos_bloqueo": 10, "votos_por_minuto": 20,
-             "max_votos_por_defecto": 1, "periodicidad_por_defecto": "unica", "resultados_por_defecto": "vivo"}
+             "resultados_por_defecto": "vivo"}
 
     def test_solo_el_administrador_entra(self):
         self.entrar()
@@ -454,13 +470,13 @@ class ConfiguracionGeneralTests(BaseVoto):
         self.assertFalse(Configuracion.objects.exists())
 
     def test_las_votaciones_nuevas_toman_los_valores_configurados(self):
-        Configuracion.objects.create(max_votos_por_defecto=2, periodicidad_por_defecto="diaria",
-                                     resultados_por_defecto="vivo")
+        Configuracion.objects.create(resultados_por_defecto="vivo")
         crear_usuario("admin@prueba.co", admin=True)
         self.entrar("admin@prueba.co")
         self.client.post("/panel/votaciones/", {"titulo": "Mejor acordeonero", "categoria": self.categoria.pk})
         v = Votacion.objects.get(titulo="Mejor acordeonero")
-        self.assertEqual((v.max_votos_por_votante, v.periodicidad_voto, v.resultados_visibles), (2, "diaria", "vivo"))
+        self.assertEqual(v.resultados_visibles, "vivo")
+        self.assertEqual(v.texto_limite(), "1 voto por persona en la categoría")
 
     def test_el_bloqueo_de_inicio_de_sesion_usa_la_configuracion(self):
         Configuracion.objects.create(max_intentos_login=2, minutos_bloqueo=7)

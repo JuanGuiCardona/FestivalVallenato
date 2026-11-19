@@ -100,7 +100,12 @@ else:
             "OPTIONS": {
                 "charset": "utf8mb4",
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+                # Nivel de aislamiento recomendado por Django para MySQL.
+                "isolation_level": "read committed",
             },
+            # Reutiliza la conexión entre peticiones (menos carga con muchos votantes).
+            "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", 60)),
+            "CONN_HEALTH_CHECKS": True,
             "TEST": {"CHARSET": "utf8mb4", "COLLATION": "utf8mb4_unicode_ci"},
         }
     }
@@ -131,6 +136,23 @@ LOGIN_BLOQUEO_SEGUNDOS = int(os.environ.get("LOGIN_BLOQUEO_SEGUNDOS", 300))
 VOTOS_MAX_POR_MINUTO = int(os.environ.get("VOTOS_MAX_POR_MINUTO", 10))
 
 
+# ---------------------------------------------------------------- caché
+# Guarda los intentos de inicio de sesión y el freno de votos por minuto.
+# En un servidor con varios procesos (Gunicorn o Waitress) use CACHE_BACKEND=db para que
+# todos compartan los mismos contadores; antes ejecute: python manage.py createcachetable
+if os.environ.get("CACHE_BACKEND", "local") == "db":
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "cache_festival"}}
+else:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+# Solo si el sistema está detrás de un proxy de confianza (Nginx, IIS, un balanceador):
+# entonces se usa la IP real que ese proxy agrega en X-Forwarded-For. Si no, se ignora ese
+# encabezado, porque cualquiera podría falsificarlo para saltarse el bloqueo por intentos.
+DETRAS_DE_PROXY = env_bool("DJANGO_DETRAS_DE_PROXY", False)
+if DETRAS_DE_PROXY:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+
 # ---------------------------------------------------------------- idioma y hora
 LANGUAGE_CODE = "es-co"
 TIME_ZONE = "America/Bogota"
@@ -143,6 +165,19 @@ STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]   # CSS, JS e imágenes del prototipo
 STATIC_ROOT = BASE_DIR / "staticfiles"     # destino de collectstatic al publicar
 
+# En el servidor, si está instalado WhiteNoise (requirements-produccion.txt), Django entrega
+# los archivos estáticos comprimidos sin configurar Nginx o IIS para ellos.
+try:
+    import whitenoise  # noqa: F401
+except ImportError:
+    whitenoise = None
+if whitenoise and not DEBUG:
+    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+    }
+
 
 # ---------------------------------------------------------------- seguridad en producción
 # RNF-01: HTTPS y cookies seguras cuando DEBUG está apagado.
@@ -150,9 +185,24 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = env_bool("DJANGO_SSL_REDIRECT", True)
-    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30
+    SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", 60 * 60 * 24 * 30))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("DJANGO_HSTS_SUBDOMINIOS", False)
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_REFERRER_POLICY = "same-origin"
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_HTTPONLY = True
+
+
+# ---------------------------------------------------------------- registro de errores
+# En el servidor, los errores se escriben en la consola (los recoge Gunicorn, Waitress o el servicio).
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"simple": {"format": "{asctime} {levelname} {name}: {message}", "style": "{"}},
+    "handlers": {"consola": {"class": "logging.StreamHandler", "formatter": "simple"}},
+    "root": {"handlers": ["consola"], "level": "WARNING"},
+    "loggers": {"django.request": {"handlers": ["consola"], "level": "ERROR", "propagate": False}},
+}
 
 
 # ---------------------------------------------------------------- mensajes

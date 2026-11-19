@@ -6,7 +6,7 @@
 {% block body %}
   <div class="ok-box info">Ya votaste en la categoría {{ v.categoria.nombre }}.<br>No se registró un voto nuevo.</div>
   {% if voto_previo %}<p class="sub">Tu voto: {{ voto_previo.votacion.titulo }} · {{ voto_previo.fecha_hora|date:"j M Y, g:i A" }} · comprobante <span class="code">{{ voto_previo.codigo }}</span></p>{% endif %}
-  <p class="sub">{% if v.periodicidad_voto == "diaria" %}El límite es {{ v.texto_limite }}*. Podrás volver a votar mañana.{% else %}Solo se registra{% if v.max_votos_por_votante == 1 %} un voto por persona{% else %}n {{ v.max_votos_por_votante }} votos por persona{% endif %} en cada categoría de la edición*. Puedes participar en las demás categorías.{% endif %}</p>
+  <p class="sub">Solo se registra un voto por persona en cada categoría de la edición. Puedes participar en las demás categorías.</p>
   <a class="btn primary" href="{% url 'voting:mi_participacion' %}">Ver mi participación</a>
   {% if v.resultados_publicos %}<a class="btn secondary" href="{% url 'results:votacion' v.pk %}">Ver resultados*</a>{% endif %}
   <a class="btn secondary" href="{% url 'catalog:categorias' %}">Ver otras categorías</a>

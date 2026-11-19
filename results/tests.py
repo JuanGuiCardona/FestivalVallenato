@@ -51,9 +51,8 @@ class CU05ResultadosPublicosTests(TestCase):
     def test_calculo_de_porcentajes_y_opcion_lider(self):
         a, b, _ = self.votacion.opciones.all()
         for i, opcion in enumerate([a, a, a, b]):
-            Voto.objects.create(usuario=crear_usuario(f"v{i}@prueba.co"), votacion=self.votacion, opcion=opcion, periodo="UNICA")
-        Voto.objects.create(usuario=crear_usuario("anulado@prueba.co"), votacion=self.votacion, opcion=b,
-                            periodo="UNICA", estado=Voto.ANULADO)
+            Voto.objects.create(usuario=crear_usuario(f"v{i}@prueba.co"), votacion=self.votacion, opcion=opcion)
+        Voto.objects.create(usuario=crear_usuario("anulado@prueba.co"), votacion=self.votacion, opcion=b, estado=Voto.ANULADO)
         filas, total = calcular(self.votacion)
         self.assertEqual(total, 4)                       # el anulado no cuenta
         self.assertEqual([f["porcentaje"] for f in filas], [75, 25, 0])
@@ -71,7 +70,7 @@ class CU09AdministracionTests(TestCase):
         self.client.post("/ingresar/", {"correo": correo, "clave": CLAVE})
 
     def test_panel_con_indicadores_reales(self):
-        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.votacion.opciones.first(), periodo="UNICA")
+        Voto.objects.create(usuario=self.votante, votacion=self.votacion, opcion=self.votacion.opciones.first())
         self.entrar()
         r = self.client.get("/panel/")
         self.assertEqual((r.context["abiertas"], r.context["votos"], r.context["usuarios"]), (1, 1, 2))
@@ -124,3 +123,65 @@ class ParametrosInvalidosTests(TestCase):
                 self.assertEqual(self.client.get(url).status_code, 200)
         r = self.client.post("/panel/opciones/nueva/", {"votacion": "abc", "nombre": "X"})
         self.assertEqual(r.status_code, 404)
+
+
+class DescargaResultadosExcelTests(TestCase):
+    """Botón «Descargar resultados (Excel)»: archivo .xlsx con datos de MySQL, sin datos de votantes."""
+
+    def setUp(self):
+        cache.clear()
+        _, self.categoria, self.votacion = crear_base()
+        self.votante = crear_usuario()
+        Voto.objects.create(usuario=self.votante, votacion=self.votacion,
+                            opcion=self.votacion.opciones.first())
+
+    def leer(self, respuesta):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("spreadsheetml", respuesta["Content-Type"])
+        self.assertIn("attachment", respuesta["Content-Disposition"])
+        return load_workbook(BytesIO(respuesta.content))
+
+    def entrar_admin(self):
+        crear_usuario("admin@prueba.co", admin=True)
+        self.client.post("/ingresar/", {"correo": "admin@prueba.co", "clave": CLAVE})
+
+    def test_admin_descarga_todos_los_resultados(self):
+        self.entrar_admin()
+        libro = self.leer(self.client.get("/panel/resultados/descargar/"))
+        self.assertEqual(libro.sheetnames, ["Resumen", "Detalle"])
+        resumen = [list(f) for f in libro["Resumen"].iter_rows(min_row=5, values_only=True)]
+        self.assertEqual(resumen[0][1:5], ["Música", "Canción favorita", "Abierta", 1])
+        self.assertEqual(resumen[0][5], "Opción A")
+        detalle = [list(f) for f in libro["Detalle"].iter_rows(min_row=5, values_only=True)]
+        self.assertEqual([(f[4], f[6]) for f in detalle], [("Opción A", 1), ("Opción B", 0), ("Opción C", 0)])
+        self.assertTrue(RegistroAuditoria.objects.filter(accion="Descarga de todos los resultados en Excel").exists())
+
+    def test_el_archivo_no_contiene_datos_de_votantes(self):
+        self.entrar_admin()
+        libro = self.leer(self.client.get("/panel/resultados/descargar/"))
+        texto = " ".join(str(c) for hoja in libro for fila in hoja.iter_rows(values_only=True) for c in fila)
+        self.assertNotIn(self.votante.correo, texto)
+
+    def test_descarga_de_todos_solo_para_el_administrador(self):
+        self.assertNotEqual(self.client.get("/panel/resultados/descargar/").status_code, 200)
+        self.client.post("/ingresar/", {"correo": self.votante.correo, "clave": CLAVE})
+        self.assertNotEqual(self.client.get("/panel/resultados/descargar/").status_code, 200)
+
+    def test_publico_descarga_solo_si_los_resultados_son_visibles(self):
+        url = f"/resultados/{self.votacion.pk}/descargar/"
+        Votacion.objects.filter(pk=self.votacion.pk).update(resultados_visibles=Votacion.RES_CIERRE)
+        self.assertEqual(self.client.get(url).status_code, 302)  # RN-11: aún no son públicos
+        Votacion.objects.filter(pk=self.votacion.pk).update(resultados_visibles=Votacion.RES_VIVO)
+        libro = self.leer(self.client.get(url))
+        self.assertEqual(libro["Resumen"]["C5"].value, "Canción favorita")
+        self.assertContains(self.client.get(f"/resultados/{self.votacion.pk}/"), "Descargar resultados (Excel)")
+
+    def test_botones_en_el_panel_y_en_a05(self):
+        self.entrar_admin()
+        self.assertContains(self.client.get("/panel/"), "Descargar resultados (Excel)")
+        r = self.client.get("/panel/resultados/")
+        self.assertContains(r, "Descargar esta votación (Excel)")
+        self.assertContains(r, "Descargar todos los resultados (Excel)")

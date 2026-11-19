@@ -12,7 +12,7 @@
     <b>Estado:</b> {% include "includes/chip.html" with estado=v.estado %}<br>
     {% if v.fecha_apertura and v.estado == "proxima" %}<b>Apertura:</b> {{ v.fecha_apertura|date:"j M Y, g:i A" }}<br>{% endif %}
     <b>Cierre:</b> {% if v.fecha_cierre %}{% if v.estado == "cerrada" %}Cerrada el {{ v.fecha_cierre|date:"j M Y" }}{% else %}{{ v.fecha_cierre|date:"j M Y, g:i A" }}{% endif %}{% else %}Por definir*{% endif %}<br>
-    <b>Límite:</b> {{ v.texto_limite }}*<br>
+    <b>Límite:</b> {{ v.texto_limite }}<br>
     <b>Opciones:</b> {{ opciones|length }}
   </p>
   {% if pista %}<p class="msg info">{{ pista }}</p>{% endif %}

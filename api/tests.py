@@ -36,8 +36,7 @@ class ApiCategoriasTests(TestCase):
 
     def test_no_expone_votos_ni_usuarios(self):
         votante = crear_usuario()
-        Voto.objects.create(usuario=votante, votacion=self.votacion, opcion=self.votacion.opciones.first(),
-                            periodo="UNICA", numero=1)
+        Voto.objects.create(usuario=votante, votacion=self.votacion, opcion=self.votacion.opciones.first())
         texto = self.client.get("/api/categorias/").content.decode()
         self.assertNotIn(votante.correo, texto)
         self.assertNotIn("votos", self.client.get("/api/categorias/").json()["categorias"][0])

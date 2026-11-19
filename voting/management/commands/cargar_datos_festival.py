@@ -40,41 +40,41 @@ class Command(BaseCommand):
             edicion.estado = Edicion.ACTIVA
             edicion.save(update_fields=["estado"])
 
-        # (categoría, [(título, descripción, estado, apertura, cierre, resultados, periodicidad, opciones)])
+        # (categoría, [(título, descripción, estado, apertura, cierre, resultados, opciones)])
         datos = [
             ("Música", [
                 ("Canción favorita del público", "Elige la canción inédita que más te hizo vibrar en la tarima.",
-                 "abierta", ahora, fecha(2027, 5, 1, 20), "vivo", "unica",
+                 "abierta", ahora, fecha(2027, 5, 1, 20), "vivo",
                  [("Canción A", "Paseo inédito"), ("Canción B", "Merengue inédito"), ("Canción C", "Son inédito")]),
                 ("Mejor presentación en tarima", "Vota por la presentación que más te emocionó.",
-                 "proxima", fecha(2027, 4, 28, 10), fecha(2027, 5, 2, 18), "cierre", "unica",
+                 "proxima", fecha(2027, 4, 28, 10), fecha(2027, 5, 2, 18), "cierre",
                  [("Presentación A", "Escenario principal"), ("Presentación B", "Parque de la Leyenda")]),
             ]),
             ("Danza y comparsas", [
                 ("Mejor vestuario de piloneras", "Reconoce el vestuario más vistoso del desfile.",
-                 "abierta", ahora, fecha(2027, 4, 30, 21), "cierre", "unica",
+                 "abierta", ahora, fecha(2027, 4, 30, 21), "cierre",
                  [("Vestuario A", "Piloneras mayores"), ("Vestuario B", "Piloneras juveniles"), ("Vestuario C", "Piloneras infantiles")]),
                 ("Comparsa más animada", "La comparsa que más puso a bailar al público.",
-                 "cerrada", ahora - timedelta(days=7), ahora - timedelta(minutes=1), "vivo", "unica",
+                 "cerrada", ahora - timedelta(days=7), ahora - timedelta(minutes=1), "vivo",
                  [("Comparsa A", "Desfile de Piloneras"), ("Comparsa B", "Desfile de Jeep Willys"), ("Comparsa C", "Plaza Alfonso López")]),
             ]),
             ("Piquería", [
                 ("Verso más ingenioso", "El verso improvisado que mejor te hizo reír o pensar.",
-                 "abierta", ahora, fecha(2027, 5, 1, 17), "cierre", "diaria",
+                 "abierta", ahora, fecha(2027, 5, 1, 17), "cierre",
                  [("Verso A", "Piquería mayor"), ("Verso B", "Piquería infantil")]),
             ]),
             ("Eventos del Festival", [
                 ("Foto favorita del Festival", "Votación en preparación.",
-                 "borrador", None, None, "cierre", "unica", [("Foto A", "Álbum oficial")]),
+                 "borrador", None, None, "cierre", [("Foto A", "Álbum oficial")]),
             ]),
         ]
         for i, (nombre_cat, votaciones) in enumerate(datos):
             categoria, _ = Categoria.objects.get_or_create(edicion=edicion, nombre=nombre_cat, defaults={"orden": i})
-            for titulo, desc, estado, apertura, cierre, res, periodicidad, opts in votaciones:
+            for titulo, desc, estado, apertura, cierre, res, opts in votaciones:
                 votacion, creada = Votacion.objects.get_or_create(
                     categoria=categoria, titulo=titulo,
                     defaults={"descripcion": desc, "estado": estado, "fecha_apertura": apertura, "fecha_cierre": cierre,
-                              "resultados_visibles": res, "periodicidad_voto": periodicidad},
+                              "resultados_visibles": res},
                 )
                 for j, (nom, d) in enumerate(opts):
                     Opcion.objects.get_or_create(votacion=votacion, nombre=nom, defaults={"descripcion": d, "orden": j})

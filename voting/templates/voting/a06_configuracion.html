@@ -15,11 +15,12 @@
       {% endif %}{% endfor %}
     </div>
     <div class="card">
-      <span class="t">Reglas iniciales de las votaciones nuevas*</span>
-      {% for f in form %}{% if f.name == "max_votos_por_defecto" or f.name == "periodicidad_por_defecto" or f.name == "resultados_por_defecto" %}
+      <span class="t">Votaciones nuevas*</span>
+      {% for f in form %}{% if f.name == "resultados_por_defecto" %}
         <label for="{{ f.id_for_label }}">{{ f.label|capfirst }}</label>{{ f }}
       {% endif %}{% endfor %}
-      <p class="note">Cada votación se puede ajustar después en «Votaciones → Configurar». La regla general es un voto por usuario en cada categoría de la edición.</p>
+      <p class="note">Cada votación se puede ajustar después en «Votaciones → Configurar».</p>
+      <p class="note"><b>Regla fija:</b> un voto por usuario en cada categoría de la edición. No se configura, para que siempre se respete.</p>
     </div>
     <button class="btn primary" type="submit">Guardar configuración</button>
   </form>
